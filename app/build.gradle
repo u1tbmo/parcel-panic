@@ -21,7 +21,7 @@ java {
 
 javafx {
     version = '25.0.2'
-    modules = [ 'javafx.controls', 'javafx.graphics' ]
+    modules = [ 'javafx.controls', 'javafx.graphics', 'javafx.media' ]
 }
 
 application {
