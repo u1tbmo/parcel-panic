@@ -27,7 +27,7 @@ javafx {
 
 application {
     mainClass = 'parcelpanic.App'
-    applicationDefaultJvmArgs = ['--enable-native-access=javafx.graphics']
+    applicationDefaultJvmArgs = ['--enable-native-access=javafx.graphics,javafx.media']
 }
 
 spotless {

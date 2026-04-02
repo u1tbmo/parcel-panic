@@ -1,4 +1,23 @@
 {
     "java.compile.nullAnalysis.mode": "automatic",
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.format.enabled": true,
+    "[java]": {
+        "files.trimTrailingWhitespace": false,
+        "spotlessGradle.diagnostics.enable": true,
+        "spotlessGradle.format.enable": true,
+        "editor.defaultFormatter": "richardwillis.vscode-spotless-gradle",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.spotlessGradle": "always"
+        }
+    },
+    "[gradle]": {
+        "files.trimTrailingWhitespace": false,
+        "spotlessGradle.diagnostics.enable": true,
+        "spotlessGradle.format.enable": true,
+        "editor.defaultFormatter": "richardwillis.vscode-spotless-gradle",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.spotlessGradle": "always"
+        }
+    }
 }
