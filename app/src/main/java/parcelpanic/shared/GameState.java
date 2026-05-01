@@ -1,0 +1,12 @@
+package parcelpanic.shared;
+
+import java.util.List;
+
+/// The complete, immutable snapshot of the game world at a specific moment in time.
+/// Produced by the Simulator and read by the Renderer.
+public record GameState(
+    double matchTimer, // Time remaining in the round
+    double unhappiness, // Percentage from 0.0 to 1.0 (or 0 to 100)
+    List<VehicleState> vehicles,
+    List<ParcelState> parcels
+) {}
