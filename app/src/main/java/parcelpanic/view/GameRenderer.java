@@ -14,9 +14,14 @@ public final class GameRenderer {
         this.assets = assets;
     }
 
-    /**
-     * Renders the static world map onto the provided GraphicsContext.
-     */
+    // Renders the complete game state.
+    public void render(GraphicsContext gc, parcelpanic.shared.GameState state, double alpha) {
+        if (state == null) return;
+        renderMap(gc, state.map());
+        // TODO: Render vehicles and parcels in future milestones
+    }
+
+    // Renders the static world map onto the provided GraphicsContext.
     public void renderMap(GraphicsContext gc, TileMap map) {
         if (map == null) return;
 
