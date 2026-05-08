@@ -66,6 +66,9 @@ public final class PauseOverlay implements Screen {
     }
 
     buildUI();
+
+    rootPane.setFocusTraversable(true);
+    javafx.application.Platform.runLater(() -> rootPane.requestFocus());
   }
 
   @Override
