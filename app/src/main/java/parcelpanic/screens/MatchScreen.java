@@ -13,17 +13,20 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
 import parcelpanic.input.InputHintProvider;
+import parcelpanic.input.LocalPlayerController;
+import parcelpanic.logic.GameSimulation;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.UiFactory;
 import parcelpanic.screen.ContentScreen;
+import parcelpanic.shared.GameState;
+import parcelpanic.shared.PlayerIntent;
 import parcelpanic.video.VideoManager;
 import parcelpanic.view.GameRenderer;
 import parcelpanic.world.MapLoader;
 import parcelpanic.world.TileMap;
 
 public final class MatchScreen extends ContentScreen {
-  private double roundSeconds;
   private Label timerLabel;
   private BorderPane rootPane;
 
@@ -33,6 +36,9 @@ public final class MatchScreen extends ContentScreen {
   private TileMap tileMap;
   private GameRenderer gameRenderer;
   private Canvas gameCanvas;
+
+  private GameSimulation simulation;
+  private LocalPlayerController inputController;
   
   @Override
   protected VideoManager.ViewportMode viewportMode() {
@@ -41,7 +47,6 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   protected void onBeforeBuild() {
-    this.roundSeconds = 180.0;
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
     this.surfaceDark = ctx.assets().getColor(ColorKey.SURFACE_DARK);
 
@@ -52,6 +57,8 @@ public final class MatchScreen extends ContentScreen {
         this.tileMap = new TileMap(20, 15); 
     }
     this.gameRenderer = new GameRenderer(ctx.assets());
+    this.simulation = new GameSimulation(tileMap);
+    this.inputController = new LocalPlayerController();
   }
 
   @Override
@@ -119,22 +126,26 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   public void fixedUpdate(double dt) {
-    roundSeconds -= dt;
-    if (roundSeconds <= 0) {
+    PlayerIntent intent = inputController.createIntent(0, ctx.input());
+    simulation.fixedUpdate(dt, intent);
+
+    if (simulation.getMatchTimer() <= 0) {
       ctx.navigator().requestSwitch(new ResultsScreen(1234));
     }
   }
 
   @Override
   public void render(double alpha) {
+    GameState state = simulation.getCurrentState();
+
     if (timerLabel != null) {
-      timerLabel.setText("Time: " + Math.max(0, (int) roundSeconds));
+      timerLabel.setText("Time: " + Math.max(0, (int) state.matchTimer()));
     }
 
     if (gameCanvas != null && gameRenderer != null) {
         GraphicsContext gc = gameCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
-        gameRenderer.renderMap(gc, tileMap);
+        gameRenderer.render(gc, state, alpha);
     }
   }
 
