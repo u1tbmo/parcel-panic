@@ -20,6 +20,12 @@ public class TileMap {
         this.width = width;
         this.height = height;
         this.grid = new TileType[width][height];
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                grid[x][y] = TileType.ROAD; 
+            }
+        }
     }
 
     public void setTile(int x, int y, TileType type) { grid[x][y] = type; }

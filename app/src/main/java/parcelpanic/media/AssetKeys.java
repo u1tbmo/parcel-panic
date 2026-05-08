@@ -34,11 +34,10 @@ public final class AssetKeys {
   public enum ImageKey {
   // Define images here as needed
   // Example: LOGO("ui/logo.png")
-    TILE_ROAD("world/road.png"),
-    TILE_WALL("world/wall.png"),
-    TILE_GRASS("world/grass.png"),
-    TILE_HUB("world/hub.png");
-
+    TILE_ROAD("tiles/tile_0468.png"),
+    TILE_WALL("tiles/tile_0028.png"),
+    TILE_HUB("tiles/tile_0012.png"),
+    TILE_TARGET("tiles/tile_0455.png");
     private final String path;
 
     ImageKey(String path) {
