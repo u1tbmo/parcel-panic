@@ -187,7 +187,8 @@ public final class PauseOverlay implements Screen {
       if (label != null) {
         label.setTextFill(item == selectedItem ? selectedColor : mutedColor);
         if (item == Item.VOLUME) {
-          label.setText(String.format("Master Volume: %d%%", (int)(ctx.audio().getVolume() * 100)));
+          label.setText(
+              String.format("Master Volume: %d%%", (int) (ctx.audio().getVolume() * 100)));
         }
       }
     }
@@ -247,9 +248,11 @@ public final class PauseOverlay implements Screen {
     }
 
     // Acceleration logic
-    double heldTime = (delta < 0) ? ctx.input().getHeldTime(InputAction.UI_LEFT)
-                                 : ctx.input().getHeldTime(InputAction.UI_RIGHT);
-    
+    double heldTime =
+        (delta < 0)
+            ? ctx.input().getHeldTime(InputAction.UI_LEFT)
+            : ctx.input().getHeldTime(InputAction.UI_RIGHT);
+
     double step = 0.01;
     if (heldTime > 2.0) {
       step = 0.10;
@@ -261,7 +264,7 @@ public final class PauseOverlay implements Screen {
 
     double newVolume = Math.clamp(ctx.audio().getVolume() + delta * step, 0.0, 1.0);
     ctx.audio().setVolume(newVolume);
-    
+
     // Auto-save volume in pause screen since there is no "Apply" button
     ctx.settings().audio().setMasterVolume(newVolume);
     ctx.settings().save();

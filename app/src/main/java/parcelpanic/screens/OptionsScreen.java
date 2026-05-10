@@ -37,7 +37,12 @@ public final class OptionsScreen extends ContentScreen {
   }
 
   private static final Option[] SELECTABLE_ALL = {
-    Option.RESOLUTION, Option.DISPLAY_MODE, Option.MASTER_VOLUME, Option.KEYBINDINGS, Option.BACK, Option.APPLY
+    Option.RESOLUTION,
+    Option.DISPLAY_MODE,
+    Option.MASTER_VOLUME,
+    Option.KEYBINDINGS,
+    Option.BACK,
+    Option.APPLY
   };
   private static final Option[] SELECTABLE_BORDERLESS = {
     Option.DISPLAY_MODE, Option.MASTER_VOLUME, Option.KEYBINDINGS, Option.BACK, Option.APPLY
@@ -274,7 +279,7 @@ public final class OptionsScreen extends ContentScreen {
     displayModeLabel.setTextFill(selectedOption == Option.DISPLAY_MODE ? selectedColor : textColor);
 
     // Master Volume label
-    volumeLabel.setText(String.format("Master Volume: %d%%", (int)(pendingVolume * 100)));
+    volumeLabel.setText(String.format("Master Volume: %d%%", (int) (pendingVolume * 100)));
     volumeLabel.setTextFill(selectedOption == Option.MASTER_VOLUME ? selectedColor : textColor);
 
     // Keybindings
@@ -380,9 +385,11 @@ public final class OptionsScreen extends ContentScreen {
     }
 
     // Acceleration logic: increase step size the longer the key is held
-    double heldTime = (delta < 0) ? ctx.input().getHeldTime(InputAction.UI_LEFT)
-                                 : ctx.input().getHeldTime(InputAction.UI_RIGHT);
-    
+    double heldTime =
+        (delta < 0)
+            ? ctx.input().getHeldTime(InputAction.UI_LEFT)
+            : ctx.input().getHeldTime(InputAction.UI_RIGHT);
+
     double step = 0.01; // Base 1%
     if (heldTime > 2.0) {
       step = 0.10; // 10% skips after 2s

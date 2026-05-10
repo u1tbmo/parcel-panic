@@ -8,7 +8,7 @@ import parcelpanic.world.TileMap;
 public record GameState(
     double matchTimer, // Time remaining in the round
     double unhappiness, // Percentage from 0.0 to 1.0 (or 0 to 100)
+    double score, // Total cash earned from deliveries
     List<VehicleState> vehicles,
     List<ParcelState> parcels,
-    TileMap map
-){}
+    TileMap map) {}

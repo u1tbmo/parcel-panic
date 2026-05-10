@@ -94,10 +94,10 @@ public final class KeybindingsScreen extends ContentScreen {
 
     VBox centerWrapper = new VBox(20);
     centerWrapper.setAlignment(Pos.TOP_CENTER);
-    
+
     // Add ScrollPane for actions
     centerWrapper.getChildren().add(center);
-    
+
     // Add Special Options below ScrollPane
     VBox specialList = new VBox(15);
     specialList.setAlignment(Pos.CENTER);
@@ -138,7 +138,10 @@ public final class KeybindingsScreen extends ContentScreen {
     VBox uiList = new VBox(10);
     uiList.setAlignment(Pos.CENTER);
     for (InputAction action : actions) {
-      if (action.name().startsWith("UI_") || action == InputAction.CONFIRM || action == InputAction.BACK || action == InputAction.PAUSE) {
+      if (action.name().startsWith("UI_")
+          || action == InputAction.CONFIRM
+          || action == InputAction.BACK
+          || action == InputAction.PAUSE) {
         uiList.getChildren().add(createActionRow(action, labelFont));
       }
     }
@@ -149,7 +152,10 @@ public final class KeybindingsScreen extends ContentScreen {
     VBox gameplayList = new VBox(10);
     gameplayList.setAlignment(Pos.CENTER);
     for (InputAction action : actions) {
-      if (action.name().startsWith("MOVE_") || action == InputAction.INTERACT || action == InputAction.DASH || action == InputAction.THROW) {
+      if (action.name().startsWith("MOVE_")
+          || action == InputAction.INTERACT
+          || action == InputAction.DASH
+          || action == InputAction.THROW) {
         gameplayList.getChildren().add(createActionRow(action, labelFont));
       }
     }
@@ -159,8 +165,9 @@ public final class KeybindingsScreen extends ContentScreen {
     scrollPane.setFitToWidth(true);
     scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
     scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-    scrollPane.setPrefHeight(400); 
-    scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
+    scrollPane.setPrefHeight(400);
+    scrollPane.setStyle(
+        "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
     scrollPane.setPannable(false);
     scrollPane.setFocusTraversable(false);
 
@@ -182,7 +189,7 @@ public final class KeybindingsScreen extends ContentScreen {
     actionLabel.setAlignment(Pos.CENTER_RIGHT);
     bindingBox.setPrefWidth(180);
     bindingBox.setAlignment(Pos.CENTER_LEFT);
-    
+
     return row;
   }
 

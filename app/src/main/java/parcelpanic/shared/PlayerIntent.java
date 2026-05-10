@@ -10,5 +10,4 @@ public record PlayerIntent(
     boolean right,
     boolean dash,
     boolean interact,
-    boolean throwParcel
-) {}
+    boolean throwParcel) {}

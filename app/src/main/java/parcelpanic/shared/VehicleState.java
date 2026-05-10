@@ -6,6 +6,8 @@ public record VehicleState(
     int id,
     double x,
     double y,
+    double vx,
+    double vy,
     double rotation, // Facing direction in degrees
-    boolean isDashing
-) {}
+    boolean isDashing,
+    boolean isAccelerating) {}

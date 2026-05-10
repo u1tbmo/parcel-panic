@@ -1,5 +1,3 @@
 package parcelpanic.logic;
 
-public class CollisionEngine {
-    
-}
+public class CollisionEngine {}

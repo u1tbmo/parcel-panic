@@ -39,7 +39,7 @@ public final class MatchScreen extends ContentScreen {
 
   private GameSimulation simulation;
   private LocalPlayerController inputController;
-  
+
   @Override
   protected VideoManager.ViewportMode viewportMode() {
     return VideoManager.ViewportMode.FIXED_16_9;
@@ -51,10 +51,10 @@ public final class MatchScreen extends ContentScreen {
     this.surfaceDark = ctx.assets().getColor(ColorKey.SURFACE_DARK);
 
     try {
-        this.tileMap = MapLoader.loadFromText("/maps/map.txt");
+      this.tileMap = MapLoader.loadFromText("/maps/map.txt");
     } catch (Exception e) {
-        System.err.println("Map failed to load, using default.");
-        this.tileMap = new TileMap(20, 15); 
+      System.err.println("Map failed to load, using default.");
+      this.tileMap = new TileMap(20, 15);
     }
     this.gameRenderer = new GameRenderer(ctx.assets());
     this.simulation = new GameSimulation(tileMap);
@@ -65,10 +65,10 @@ public final class MatchScreen extends ContentScreen {
   protected Node createContent() {
     buildUI();
 
-    int tileSize = 40; 
+    int tileSize = 40;
     this.gameCanvas = new Canvas(tileMap.getWidth() * tileSize, tileMap.getHeight() * tileSize);
 
-    rootPane.setMouseTransparent(false); 
+    rootPane.setMouseTransparent(false);
     rootPane.setPickOnBounds(false);
 
     StackPane gameLayer = new StackPane();
@@ -143,9 +143,9 @@ public final class MatchScreen extends ContentScreen {
     }
 
     if (gameCanvas != null && gameRenderer != null) {
-        GraphicsContext gc = gameCanvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
-        gameRenderer.render(gc, state, alpha);
+      GraphicsContext gc = gameCanvas.getGraphicsContext2D();
+      gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
+      gameRenderer.render(gc, state, alpha);
     }
   }
 

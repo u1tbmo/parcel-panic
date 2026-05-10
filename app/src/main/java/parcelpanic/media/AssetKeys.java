@@ -32,8 +32,8 @@ public final class AssetKeys {
 
   /// Enum of Images
   public enum ImageKey {
-  // Define images here as needed
-  // Example: LOGO("ui/logo.png")
+    // Define images here as needed
+    // Example: LOGO("ui/logo.png")
     TILE_ROAD("tiles/tile_0468.png"),
     TILE_WALL("tiles/tile_0028.png"),
     TILE_HUB("tiles/tile_0012.png"),
