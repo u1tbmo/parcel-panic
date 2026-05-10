@@ -14,6 +14,6 @@ public class HUD extends VBox {
 
   public void render(GameState state) {
     timerLabel.setText("Time: " + (int) state.matchTimer());
-    unhappinessLabel.setText("Unhappiness: " + (int) (state.unhappiness() * 100) + "%");
+    unhappinessLabel.setText("Unhappiness: " + (int) state.unhappiness() + "%");
   }
 }

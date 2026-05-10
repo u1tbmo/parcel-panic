@@ -30,7 +30,7 @@ public final class AssetRegistry {
           try {
             String resourcePath = "/assets/" + key.getPath();
             return new Image(
-                getClass().getResourceAsStream(resourcePath), width, height, true, true);
+                getClass().getResourceAsStream(resourcePath), width, height, true, false);
           } catch (Exception e) {
             System.err.println("Failed to load image: " + key.name());
             return createPlaceholderImage(width > 0 ? width : 32, height > 0 ? height : 32);

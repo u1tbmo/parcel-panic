@@ -6,6 +6,7 @@ public record ParcelState(
     int id,
     double x,
     double y,
+    double z,
     Integer carrierId, // The ID of the Vehicle carrying it, or null if it's on the ground/Hub
     double remainingTime, // Seconds left before the delivery expires
     boolean isDamaged,

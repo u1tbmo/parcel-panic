@@ -1,9 +1,65 @@
 package parcelpanic.logic;
 
+import parcelpanic.logic.entities.ParcelLogic;
 import parcelpanic.logic.entities.VehicleLogic;
 import parcelpanic.world.TileMap;
 
 public class CollisionEngine {
+
+  public static void resolveParcel(ParcelLogic parcel, TileMap map, double oldX, double oldY) {
+    if (map == null) return;
+
+    double hw = MatchRules.PARCEL_SIZE / 2.0;
+    double hh = MatchRules.PARCEL_SIZE / 2.0;
+
+    double cx = parcel.x();
+    double cy = parcel.y();
+    double oldCy = oldY;
+
+    int centerTileX = (int) Math.floor(cx / MatchRules.TILE_SIZE);
+    int centerTileY = (int) Math.floor(cy / MatchRules.TILE_SIZE);
+
+    // 1. Resolve X-axis using oldCy
+    double leftEdge = cx - hw;
+    int leftTileX = (int) Math.floor(leftEdge / MatchRules.TILE_SIZE);
+    if (leftTileX < centerTileX) {
+      if (isSolid(leftEdge, oldCy - hh, map) || isSolid(leftEdge, oldCy + hh, map)) {
+        parcel.setX((leftTileX + 1) * MatchRules.TILE_SIZE + hw);
+        parcel.bounceX();
+      }
+    }
+
+    double rightEdge = cx + hw;
+    int rightTileX = (int) Math.floor(rightEdge / MatchRules.TILE_SIZE);
+    if (rightTileX > centerTileX) {
+      if (isSolid(rightEdge, oldCy - hh, map) || isSolid(rightEdge, oldCy + hh, map)) {
+        parcel.setX(rightTileX * MatchRules.TILE_SIZE - hw);
+        parcel.bounceX();
+      }
+    }
+
+    // Re-evaluate X center after potential snap
+    cx = parcel.x();
+
+    // 2. Resolve Y-axis using the new (potentially snapped) cx
+    double topEdge = cy - hh;
+    int topTileY = (int) Math.floor(topEdge / MatchRules.TILE_SIZE);
+    if (topTileY < centerTileY) {
+      if (isSolid(cx - hw, topEdge, map) || isSolid(cx + hw, topEdge, map)) {
+        parcel.setY((topTileY + 1) * MatchRules.TILE_SIZE + hh);
+        parcel.bounceY();
+      }
+    }
+
+    double bottomEdge = cy + hh;
+    int bottomTileY = (int) Math.floor(bottomEdge / MatchRules.TILE_SIZE);
+    if (bottomTileY > centerTileY) {
+      if (isSolid(cx - hw, bottomEdge, map) || isSolid(cx + hw, bottomEdge, map)) {
+        parcel.setY(bottomTileY * MatchRules.TILE_SIZE - hh);
+        parcel.bounceY();
+      }
+    }
+  }
 
   public static void resolve(VehicleLogic vehicle, TileMap map, double oldX, double oldY) {
     if (map == null) return;

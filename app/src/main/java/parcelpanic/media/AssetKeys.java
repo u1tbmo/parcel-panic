@@ -37,7 +37,9 @@ public final class AssetKeys {
     TILE_ROAD("tiles/tile_0468.png"),
     TILE_WALL("tiles/tile_0028.png"),
     TILE_HUB("tiles/tile_0012.png"),
-    TILE_TARGET("tiles/tile_0455.png");
+    TILE_TARGET("tiles/tile_0455.png"),
+    VEHICLE_CAR("entities/car.png"),
+    ENTITY_PARCEL("entities/parcel.png");
     private final String path;
 
     ImageKey(String path) {

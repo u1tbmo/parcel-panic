@@ -1,5 +1,6 @@
 package parcelpanic.screens;
 
+import java.util.List;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -12,9 +13,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
-import parcelpanic.input.InputHintProvider;
 import parcelpanic.input.LocalPlayerController;
 import parcelpanic.logic.GameSimulation;
+import parcelpanic.logic.entities.ParcelLogic;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.UiFactory;
@@ -28,10 +29,7 @@ import parcelpanic.world.TileMap;
 
 public final class MatchScreen extends ContentScreen {
   private Label timerLabel;
-  private BorderPane rootPane;
-
-  private Color textColor;
-  private Color surfaceDark;
+  private Label scoreLabel;
 
   private TileMap tileMap;
   private GameRenderer gameRenderer;
@@ -47,9 +45,6 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   protected void onBeforeBuild() {
-    this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
-    this.surfaceDark = ctx.assets().getColor(ColorKey.SURFACE_DARK);
-
     try {
       this.tileMap = MapLoader.loadFromText("/maps/map.txt");
     } catch (Exception e) {
@@ -59,75 +54,49 @@ public final class MatchScreen extends ContentScreen {
     this.gameRenderer = new GameRenderer(ctx.assets());
     this.simulation = new GameSimulation(tileMap);
     this.inputController = new LocalPlayerController();
+
+    // Initial game state setup
+    simulation.addPlayer(1, 300, 300);
+    simulation.addParcel(new ParcelLogic(1, 1, 620, 260));
   }
 
   @Override
   protected Node createContent() {
-    buildUI();
-
     int tileSize = 40;
     this.gameCanvas = new Canvas(tileMap.getWidth() * tileSize, tileMap.getHeight() * tileSize);
 
-    rootPane.setMouseTransparent(false);
-    rootPane.setPickOnBounds(false);
-
     StackPane gameLayer = new StackPane();
-    gameLayer.getChildren().addAll(gameCanvas, rootPane);
+    gameLayer.getChildren().add(gameCanvas);
     gameLayer.setAlignment(Pos.CENTER);
 
-    return gameLayer;
-  }
+    BorderPane rootPane =
+        UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+    rootPane.setMouseTransparent(true);
+    rootPane.setPickOnBounds(false);
 
-  private void buildUI() {
-    rootPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    // rootPane.setBackground(
-    //     UiFactory.createBackground(
-    //             surfaceDark, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
-    //         .getBackground());
+    Font font = ctx.assets().getFont(FontKey.LABEL, 20);
+    Color textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
 
-    VBox centerContainer = createCenterContainer();
-    VBox bottomContainer = createBottomContainer();
+    timerLabel = UiFactory.createLabel("03:00", font, textColor);
+    scoreLabel = UiFactory.createLabel("$0", font, textColor);
 
-    rootPane.setCenter(centerContainer);
-    rootPane.setBottom(bottomContainer);
-  }
+    VBox hudBox = new VBox(5);
+    hudBox.setAlignment(Pos.TOP_CENTER);
+    hudBox.setPadding(new Insets(10, 0, 0, 0));
+    hudBox.getChildren().addAll(timerLabel, scoreLabel);
 
-  private VBox createCenterContainer() {
-    Font font = ctx.assets().getFont(FontKey.HEADLINE);
-    Label status = UiFactory.createLabel("MATCH RUNNING", font, textColor);
+    rootPane.setTop(hudBox);
 
-    Font timerFont = ctx.assets().getFont(FontKey.TITLE);
-    timerLabel = UiFactory.createLabel("Time: 180", timerFont, textColor);
+    StackPane finalLayer = new StackPane();
+    finalLayer.getChildren().addAll(gameLayer, rootPane);
 
-    VBox container = new VBox(20);
-    container.setAlignment(Pos.CENTER);
-    container.getChildren().addAll(status, timerLabel);
-    return container;
-  }
-
-  private VBox createBottomContainer() {
-    Font hintFont = ctx.assets().getFont(FontKey.LABEL);
-    Font iconFont = ctx.assets().getFont(FontKey.HINT);
-    Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
-
-    Node pauseHint =
-        UiFactory.createHint(
-            InputHintProvider.getIconForAction(InputAction.PAUSE, ctx.settings().controls()),
-            "Pause",
-            iconFont,
-            hintFont,
-            hintColor);
-
-    VBox container = new VBox(pauseHint);
-    container.setAlignment(Pos.BOTTOM_CENTER);
-    container.setPadding(new Insets(0, 0, 60, 0));
-    return container;
+    return finalLayer;
   }
 
   @Override
   public void fixedUpdate(double dt) {
-    PlayerIntent intent = inputController.createIntent(0, ctx.input());
-    simulation.fixedUpdate(dt, intent);
+    PlayerIntent intent = inputController.createIntent(1, ctx.input());
+    simulation.update(dt, List.of(intent));
 
     if (simulation.getMatchTimer() <= 0) {
       ctx.navigator().requestSwitch(new ResultsScreen(1234));
@@ -136,10 +105,15 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   public void render(double alpha) {
-    GameState state = simulation.getCurrentState();
+    GameState state = simulation.generateSnapshot();
 
-    if (timerLabel != null) {
-      timerLabel.setText("Time: " + Math.max(0, (int) state.matchTimer()));
+    if (timerLabel != null && scoreLabel != null) {
+      int totalSeconds = Math.max(0, (int) state.matchTimer());
+      int minutes = totalSeconds / 60;
+      int seconds = totalSeconds % 60;
+
+      timerLabel.setText(String.format("%02d:%02d", minutes, seconds));
+      scoreLabel.setText(String.format("$%d", (int) state.score()));
     }
 
     if (gameCanvas != null && gameRenderer != null) {

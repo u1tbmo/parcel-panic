@@ -68,11 +68,9 @@ public final class ScreenManager {
   /// Called every simulation tick.
   public void fixedUpdate(double dt) {
     switchScreens();
-    if (current != null) {
-      current.fixedUpdate(dt);
-    }
-    for (Screen overlay : overlayStack) {
-      overlay.fixedUpdate(dt);
+    Screen active = activeScreen();
+    if (active != null) {
+      active.fixedUpdate(dt);
     }
   }
 

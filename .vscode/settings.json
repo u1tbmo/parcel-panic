@@ -19,5 +19,6 @@
         "editor.codeActionsOnSave": {
             "source.fixAll.spotlessGradle": "always"
         }
-    }
+    },
+    "editor.tabSize": 2
 }

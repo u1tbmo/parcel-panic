@@ -17,6 +17,7 @@ public class VehicleLogic {
   private double rotation = 0;
 
   private double dashCooldown = 0;
+  private double pickupCooldown = 0;
   private boolean isDashing = false;
   private boolean isAccelerating = false;
 
@@ -26,6 +27,14 @@ public class VehicleLogic {
     this.y = y;
   }
 
+  public void triggerPickupCooldown() {
+    this.pickupCooldown = MatchRules.PICKUP_COOLDOWN_TIME;
+  }
+
+  public boolean canPickup() {
+    return pickupCooldown <= 0;
+  }
+
   private double approach(double current, double target, double maxDelta) {
     return current < target
         ? Math.min(current + maxDelta, target)
@@ -33,6 +42,9 @@ public class VehicleLogic {
   }
 
   public void update(double dt, PlayerIntent intent) {
+    if (pickupCooldown > 0) {
+      pickupCooldown -= dt;
+    }
     isAccelerating = intent.up() || intent.down() || intent.left() || intent.right();
 
     double targetVx = 0;

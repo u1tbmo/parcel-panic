@@ -58,6 +58,9 @@ public class GameSimulation {
     }
 
     for (ParcelLogic parcel : parcels) {
+      double oldX = parcel.x();
+      double oldY = parcel.y();
+
       if (parcel.update(dt)) {
         unhappiness = MatchRules.calculatePenalty(unhappiness);
       }
@@ -70,6 +73,7 @@ public class GameSimulation {
       }
 
       if (parcel.currentState() == ParcelLogic.State.THROWN) {
+        CollisionEngine.resolveParcel(parcel, tileMap, oldX, oldY);
         checkCatch(parcel);
       }
     }
@@ -81,7 +85,7 @@ public class GameSimulation {
     if (intent.interact()) {
       // 1. Check for Pickup (Hub or Ground)
       ParcelLogic nearby = findNearbyParcel(vehicle);
-      if (nearby != null) {
+      if (nearby != null && vehicle.canPickup()) {
         double progress = interactionGauges.get(vehicle.id()) + dt;
         if (progress >= MatchRules.INTERACT_TIME_REQUIRED) {
           nearby.pickup(vehicle.id());
@@ -121,6 +125,7 @@ public class GameSimulation {
           double vx = Math.sin(rad) * throwSpeed;
           double vy = -Math.cos(rad) * throwSpeed;
           p.launch(vehicle.x(), vehicle.y(), vx, vy);
+          vehicle.triggerPickupCooldown();
           break;
         }
       }
@@ -129,6 +134,9 @@ public class GameSimulation {
 
   private void checkCatch(ParcelLogic parcel) {
     for (VehicleLogic vehicle : vehicles.values()) {
+      // Check if vehicle is in cooldown
+      if (!vehicle.canPickup()) continue;
+
       double dist = Math.hypot(parcel.x() - vehicle.x(), parcel.y() - vehicle.y());
       if (dist < MatchRules.INTERACT_RANGE) {
         parcel.pickup(vehicle.id());

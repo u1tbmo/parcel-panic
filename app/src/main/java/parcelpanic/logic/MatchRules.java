@@ -28,12 +28,20 @@ public class MatchRules {
 
   // Physics - Items
   public static final double THROW_SPEED = 600.0;
-  public static final double MAX_THROW_TIME = 0.6;
-  public static final double INTERACT_RANGE = 48.0;
+  public static final double PARCEL_FRICTION = 0.96;
+  public static final double PARCEL_BOUNCE = 0.6;
+  public static final double PARCEL_MIN_SPEED = 30.0;
+  public static final double PARCEL_GRAVITY = 800.0;
+  public static final double PARCEL_INITIAL_Z = 20.0;
+  public static final double PARCEL_LAUNCH_VZ = 200.0;
+  public static final double PARCEL_BOUNCE_Z = 0.5;
+  public static final double PARCEL_SIZE = 24.0;
+  public static final double INTERACT_RANGE = 32.0;
 
   // Timers & Lifecycle
   public static final double MATCH_DURATION = 180.0;
-  public static final double INTERACT_TIME_REQUIRED = 1.2;
+  public static final double INTERACT_TIME_REQUIRED = 0.6;
+  public static final double PICKUP_COOLDOWN_TIME = 0.5;
   public static final double MAX_PARCEL_TIME = 30.0;
 
   // Scoring & Penalties
