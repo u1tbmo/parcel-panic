@@ -1,5 +1,9 @@
 package parcelpanic.world;
 
+import java.util.ArrayList;
+import java.util.List;
+import javafx.geometry.Point2D;
+
 public class TileMap {
   private final int width;
   private final int height;
@@ -37,6 +41,16 @@ public class TileMap {
 
   public TileType getTile(int x, int y) {
     return grid[x][y];
+  }
+
+  public List<Point2D> getTilesOfType(TileType type) {
+    List<Point2D> points = new ArrayList<>();
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        if (grid[x][y] == type) points.add(new Point2D(x, y));
+      }
+    }
+    return points;
   }
 
   public int getWidth() {

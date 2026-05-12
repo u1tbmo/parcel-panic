@@ -49,6 +49,10 @@ public class MatchRules {
   public static final double PENALTY_PER_EXPIRATION = 15.0;
   public static final double SCORE_PER_DELIVERY = 100.0;
 
+  // Spawning
+  public static final double PARCEL_SPAWN_INTERVAL = 7.5;
+  public static final int MAX_PARCELS_ON_SCREEN = 10;
+
   public static double calculatePenalty(double currentUnhappiness) {
     return Math.min(MAX_UNHAPPINESS, currentUnhappiness + PENALTY_PER_EXPIRATION);
   }
