@@ -1,22 +1,33 @@
 package parcelpanic.view;
 
+import javafx.geometry.Point2D;
+import javafx.geometry.VPos;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
+import javafx.scene.text.TextAlignment;
+import parcelpanic.input.InputAction;
+import parcelpanic.input.InputHintProvider;
+import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.AssetKeys.ImageKey;
 import parcelpanic.media.AssetRegistry;
+import parcelpanic.settings.GameSettings.ControlsSettings;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.VehicleState;
+import parcelpanic.shared.VehicleState.PromptType;
 import parcelpanic.world.TileMap;
 import parcelpanic.world.TileMap.TileType;
 
 public final class GameRenderer {
   private static final int TILE_SIZE = 40;
+  private static final double PROMPT_ICON_SIZE = 38.0;
   private final AssetRegistry assets;
+  private final ControlsSettings controls;
 
-  public GameRenderer(AssetRegistry assets) {
+  public GameRenderer(AssetRegistry assets, ControlsSettings controls) {
     this.assets = assets;
+    this.controls = controls;
   }
 
   public void render(GraphicsContext gc, GameState state, double alpha) {
@@ -25,11 +36,12 @@ public final class GameRenderer {
     gc.setImageSmoothing(false);
 
     renderMap(gc, state.map());
+    renderHouseLabels(gc, state);
     renderParcels(gc, state);
     renderVehicles(gc, state);
   }
 
-  /** Renders the static world map onto the provided GraphicsContext. */
+  /// Renders the static world map onto the provided GraphicsContext.
   public void renderMap(GraphicsContext gc, TileMap map) {
     if (map == null) return;
 
@@ -85,7 +97,133 @@ public final class GameRenderer {
         gc.strokeOval(dotX - dotSize / 2, dotY - dotSize / 2, dotSize, dotSize);
         gc.restore();
       }
+
+      // Render target house ID if vehicle is carrying a parcel
+      ParcelState carriedParcel = findCarriedParcel(state, vehicle.id());
+      if (carriedParcel != null) {
+        gc.save();
+        gc.setFont(assets.getFont(FontKey.LABEL, FontKey.LABEL.getDefaultSize()));
+        gc.setFill(Color.WHITE);
+        gc.setTextAlign(TextAlignment.CENTER);
+        gc.setTextBaseline(VPos.CENTER);
+        String targetNum = String.valueOf(carriedParcel.targetHouseId());
+        gc.fillText(targetNum, vehicle.x(), vehicle.y() - 28);
+        gc.restore();
+      }
+
+      renderPrompt(gc, state, vehicle);
     }
+  }
+
+  private void renderPrompt(GraphicsContext gc, GameState state, VehicleState vehicle) {
+    PromptType prompt = vehicle.prompt();
+    if (prompt == null || prompt == PromptType.NONE) {
+      return;
+    }
+
+    double centerX;
+    double centerY;
+
+    // For DELIVER_WRONG, show at vehicle's current location (the wrong house).
+    // For other prompts (PICKUP and DELIVER_OK), show at the target.
+    if (prompt == PromptType.PICKUP) {
+      ParcelState targetParcel = findNearestInteractableParcel(state, vehicle);
+      if (targetParcel == null) {
+        return;
+      }
+      centerX = targetParcel.x();
+      centerY = targetParcel.y() - targetParcel.z() - 28;
+    } else {
+      if (prompt == PromptType.DELIVER_WRONG) {
+        // Wrong house: show at vehicle's current location
+        centerX = vehicle.x();
+        centerY = vehicle.y() - 40;
+      } else {
+        // Correct house: show at target zone
+        ParcelState carriedParcel = findCarriedParcel(state, vehicle.id());
+        if (carriedParcel == null || state.map() == null) {
+          return;
+        }
+
+        Point2D targetCenter = findTargetZoneCenter(state.map(), carriedParcel.targetHouseId());
+        if (targetCenter == null) {
+          return;
+        }
+
+        centerX = targetCenter.getX();
+        centerY = targetCenter.getY() - 12;
+      }
+    }
+
+    gc.save();
+
+    if (prompt == PromptType.DELIVER_WRONG) {
+      Image cross = assets.getImage(ImageKey.EMOTE_CROSS, PROMPT_ICON_SIZE, PROMPT_ICON_SIZE);
+      if (cross != null) {
+        gc.drawImage(
+            cross,
+            centerX - PROMPT_ICON_SIZE / 2.0,
+            centerY - PROMPT_ICON_SIZE / 2.0,
+            PROMPT_ICON_SIZE,
+            PROMPT_ICON_SIZE);
+      }
+    } else {
+      gc.setFont(assets.getFont(FontKey.HINT, FontKey.HINT.getDefaultSize()));
+      gc.setFill(Color.WHITE);
+      gc.setTextAlign(TextAlignment.CENTER);
+      gc.setTextBaseline(VPos.CENTER);
+      gc.fillText(
+          InputHintProvider.getIconForAction(InputAction.INTERACT, controls), centerX, centerY);
+    }
+
+    gc.restore();
+  }
+
+  private ParcelState findNearestInteractableParcel(GameState state, VehicleState vehicle) {
+    if (state.parcels() == null || state.parcels().isEmpty()) {
+      return null;
+    }
+
+    ParcelState nearest = null;
+    double bestDistance = Double.MAX_VALUE;
+    for (ParcelState parcel : state.parcels()) {
+      if (parcel.carrierId() != null) {
+        continue;
+      }
+
+      double distance = Math.hypot(parcel.x() - vehicle.x(), parcel.y() - vehicle.y());
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        nearest = parcel;
+      }
+    }
+
+    return nearest;
+  }
+
+  private ParcelState findCarriedParcel(GameState state, int vehicleId) {
+    if (state.parcels() == null || state.parcels().isEmpty()) {
+      return null;
+    }
+
+    for (ParcelState parcel : state.parcels()) {
+      if (parcel.carrierId() != null && parcel.carrierId() == vehicleId) {
+        return parcel;
+      }
+    }
+
+    return null;
+  }
+
+  private Point2D findTargetZoneCenter(TileMap map, int targetHouseId) {
+    var targets = map.getTilesOfType(TileType.TARGET_ZONE);
+    if (targetHouseId < 0 || targetHouseId >= targets.size()) {
+      return null;
+    }
+
+    Point2D tile = targets.get(targetHouseId);
+    return new javafx.geometry.Point2D(
+        tile.getX() * TILE_SIZE + TILE_SIZE / 2.0, tile.getY() * TILE_SIZE + TILE_SIZE / 2.0);
   }
 
   private void renderParcels(GraphicsContext gc, GameState state) {
@@ -133,5 +271,29 @@ public final class GameRenderer {
         };
     if (key == null) return null;
     return assets.getImage(key, TILE_SIZE, TILE_SIZE);
+  }
+
+  /** Renders house labels (numbers) at the bottom of each TARGET_ZONE tile. */
+  private void renderHouseLabels(GraphicsContext gc, GameState state) {
+    if (state.map() == null) return;
+
+    var targets = state.map().getTilesOfType(TileType.TARGET_ZONE);
+    gc.save();
+    gc.setFont(assets.getFont(FontKey.LABEL, FontKey.LABEL.getDefaultSize()));
+    gc.setFill(Color.WHITE);
+    gc.setTextAlign(TextAlignment.CENTER);
+    gc.setTextBaseline(VPos.CENTER);
+
+    for (int i = 0; i < targets.size(); i++) {
+      Point2D tile = targets.get(i);
+      double x = tile.getX() * TILE_SIZE + TILE_SIZE / 2.0;
+      double y = tile.getY() * TILE_SIZE + TILE_SIZE - 8; // Bottom of tile
+
+      String label = String.valueOf(i);
+      gc.strokeText(label, x, y);
+      gc.fillText(label, x, y);
+    }
+
+    gc.restore();
   }
 }

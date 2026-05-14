@@ -4,28 +4,38 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import javafx.geometry.Point2D;
 import parcelpanic.logic.entities.ParcelLogic;
 import parcelpanic.logic.entities.VehicleLogic;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.PlayerIntent;
 import parcelpanic.shared.VehicleState;
+import parcelpanic.shared.VehicleState.PromptType;
 import parcelpanic.world.TileMap;
 
 public class GameSimulation {
   private final Map<Integer, VehicleLogic> vehicles = new HashMap<>();
   private final List<ParcelLogic> parcels = new ArrayList<>();
+  private final Random random = new Random();
 
   private final Map<Integer, Double> interactionGauges = new HashMap<>();
 
   private double matchTimer = MatchRules.MATCH_DURATION;
   private double unhappiness = 0.0;
   private double score = 0.0;
+  private double spawnTimer = 2.0; // Initial delay before first spawn
 
   private final TileMap tileMap;
+  private final List<Point2D> hubLocations;
+  private final List<Point2D> targetLocations;
+  private int parcelIdCounter = 1;
 
   public GameSimulation(TileMap tileMap) {
     this.tileMap = tileMap;
+    this.hubLocations = tileMap.getTilesOfType(TileMap.TileType.HUB);
+    this.targetLocations = tileMap.getTilesOfType(TileMap.TileType.TARGET_ZONE);
   }
 
   public void addPlayer(int id, double x, double y) {
@@ -41,7 +51,14 @@ public class GameSimulation {
     matchTimer = Math.max(0, matchTimer - dt);
 
     if (MatchRules.isGameOver(unhappiness, matchTimer)) {
-      // Logic for game over could be handled here or by the screen checking the state
+      // Logic for game over
+    }
+
+    // Handle Parcel Spawning
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnParcel();
+      spawnTimer = MatchRules.PARCEL_SPAWN_INTERVAL;
     }
 
     for (PlayerIntent intent : intents) {
@@ -55,14 +72,18 @@ public class GameSimulation {
       CollisionEngine.resolve(vehicle, tileMap, oldX, oldY);
       handleInteraction(dt, vehicle, intent);
       handleThrowing(vehicle, intent);
+      updatePrompt(vehicle);
     }
 
-    for (ParcelLogic parcel : parcels) {
+    for (int i = parcels.size() - 1; i >= 0; i--) {
+      ParcelLogic parcel = parcels.get(i);
       double oldX = parcel.x();
       double oldY = parcel.y();
 
       if (parcel.update(dt)) {
         unhappiness = MatchRules.calculatePenalty(unhappiness);
+        parcels.remove(i);
+        continue;
       }
 
       if (parcel.currentState() == ParcelLogic.State.CARRIED) {
@@ -81,9 +102,23 @@ public class GameSimulation {
     return generateSnapshot();
   }
 
+  private void spawnParcel() {
+    if (parcels.size() >= MatchRules.MAX_PARCELS_ON_SCREEN) return;
+    if (hubLocations.isEmpty() || targetLocations.isEmpty()) return;
+
+    Point2D hub = hubLocations.get(random.nextInt(hubLocations.size()));
+    int targetId = random.nextInt(targetLocations.size());
+
+    // Center the parcel in the 40x40 tile
+    double px = hub.getX() * MatchRules.TILE_SIZE + 20;
+    double py = hub.getY() * MatchRules.TILE_SIZE + 20;
+
+    parcels.add(new ParcelLogic(parcelIdCounter++, targetId, px, py));
+  }
+
   private void handleInteraction(double dt, VehicleLogic vehicle, PlayerIntent intent) {
     if (intent.interact()) {
-      // 1. Check for Pickup (Hub or Ground)
+      // Check for Pickup (Hub or Ground)
       ParcelLogic nearby = findNearbyParcel(vehicle);
       if (nearby != null && vehicle.canPickup()) {
         double progress = interactionGauges.get(vehicle.id()) + dt;
@@ -93,20 +128,34 @@ public class GameSimulation {
         } else {
           interactionGauges.put(vehicle.id(), progress);
         }
-        return; // Prioritize pickup over delivery if both are possible
+        return;
       }
 
-      // 2. Check for Delivery (At a House/Target Zone)
-      int tx = (int) (vehicle.x() / MatchRules.TILE_SIZE);
-      int ty = (int) (vehicle.y() / MatchRules.TILE_SIZE);
+      // Check for Delivery (At a House/Target Zone)
+      int tx = (int) Math.floor(vehicle.x() / MatchRules.TILE_SIZE);
+      int ty = (int) Math.floor(vehicle.y() / MatchRules.TILE_SIZE);
 
       if (tx >= 0 && tx < tileMap.getWidth() && ty >= 0 && ty < tileMap.getHeight()) {
         if (tileMap.getTile(tx, ty) == TileMap.TileType.TARGET_ZONE) {
-          for (ParcelLogic p : parcels) {
-            if (p.carrierId() != null && p.carrierId() == vehicle.id()) {
-              score += MatchRules.calculateDeliveryScore(p.remainingTime());
-              parcels.remove(p); // Remove delivered parcel
+          // Identify which target zone this tile represents
+          int currentZoneId = -1;
+          for (int i = 0; i < targetLocations.size(); i++) {
+            Point2D loc = targetLocations.get(i);
+            if ((int) loc.getX() == tx && (int) loc.getY() == ty) {
+              currentZoneId = i;
               break;
+            }
+          }
+
+          // Check if carried parcel matches this zone
+          for (int i = parcels.size() - 1; i >= 0; i--) {
+            ParcelLogic p = parcels.get(i);
+            if (p.carrierId() != null && p.carrierId() == vehicle.id()) {
+              if (p.targetHouseId() == currentZoneId) {
+                score += MatchRules.calculateDeliveryScore(p.remainingTime());
+                parcels.remove(i);
+                break;
+              }
             }
           }
         }
@@ -114,6 +163,60 @@ public class GameSimulation {
     } else {
       interactionGauges.put(vehicle.id(), 0.0);
     }
+  }
+
+  private void updatePrompt(VehicleLogic vehicle) {
+    ParcelLogic carried = findCarriedParcel(vehicle.id());
+    if (carried != null) {
+      int tx = (int) Math.floor(vehicle.x() / MatchRules.TILE_SIZE);
+      int ty = (int) Math.floor(vehicle.y() / MatchRules.TILE_SIZE);
+      if (tx < 0 || tx >= tileMap.getWidth() || ty < 0 || ty >= tileMap.getHeight()) {
+        vehicle.setPrompt(PromptType.NONE);
+        return;
+      }
+
+      if (tileMap.getTile(tx, ty) != TileMap.TileType.TARGET_ZONE) {
+        vehicle.setPrompt(PromptType.NONE);
+        return;
+      }
+
+      int currentZoneId = -1;
+      for (int i = 0; i < targetLocations.size(); i++) {
+        Point2D loc = targetLocations.get(i);
+        if ((int) loc.getX() == tx && (int) loc.getY() == ty) {
+          currentZoneId = i;
+          break;
+        }
+      }
+
+      if (currentZoneId < 0) {
+        vehicle.setPrompt(PromptType.NONE);
+        return;
+      }
+
+      vehicle.setPrompt(
+          carried.targetHouseId() == currentZoneId
+              ? PromptType.DELIVER_OK
+              : PromptType.DELIVER_WRONG);
+      return;
+    }
+
+    ParcelLogic nearby = findNearbyParcel(vehicle);
+    if (nearby != null) {
+      vehicle.setPrompt(PromptType.PICKUP);
+      return;
+    }
+
+    vehicle.setPrompt(PromptType.NONE);
+  }
+
+  private ParcelLogic findCarriedParcel(int vehicleId) {
+    for (ParcelLogic parcel : parcels) {
+      if (parcel.carrierId() != null && parcel.carrierId() == vehicleId) {
+        return parcel;
+      }
+    }
+    return null;
   }
 
   private void handleThrowing(VehicleLogic vehicle, PlayerIntent intent) {

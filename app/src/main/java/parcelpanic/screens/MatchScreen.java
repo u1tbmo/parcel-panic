@@ -51,7 +51,7 @@ public final class MatchScreen extends ContentScreen {
       System.err.println("Map failed to load, using default.");
       this.tileMap = new TileMap(20, 15);
     }
-    this.gameRenderer = new GameRenderer(ctx.assets());
+    this.gameRenderer = new GameRenderer(ctx.assets(), ctx.settings().controls());
     this.simulation = new GameSimulation(tileMap);
     this.inputController = new LocalPlayerController();
 

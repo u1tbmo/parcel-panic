@@ -20,6 +20,7 @@ public class VehicleLogic {
   private double pickupCooldown = 0;
   private boolean isDashing = false;
   private boolean isAccelerating = false;
+  private VehicleState.PromptType prompt = VehicleState.PromptType.NONE;
 
   public VehicleLogic(int id, double x, double y) {
     this.id = id;
@@ -29,6 +30,10 @@ public class VehicleLogic {
 
   public void triggerPickupCooldown() {
     this.pickupCooldown = MatchRules.PICKUP_COOLDOWN_TIME;
+  }
+
+  public void setPrompt(VehicleState.PromptType prompt) {
+    this.prompt = prompt == null ? VehicleState.PromptType.NONE : prompt;
   }
 
   public boolean canPickup() {
@@ -122,7 +127,7 @@ public class VehicleLogic {
   }
 
   public VehicleState state() {
-    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating);
+    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt);
   }
 
   public int id() {

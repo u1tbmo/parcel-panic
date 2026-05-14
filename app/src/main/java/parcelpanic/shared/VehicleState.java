@@ -8,6 +8,14 @@ public record VehicleState(
     double y,
     double vx,
     double vy,
-    double rotation, // Facing direction in degrees
+    double rotation, 
     boolean isDashing,
-    boolean isAccelerating) {}
+    boolean isAccelerating,
+    PromptType prompt) {
+  public enum PromptType {
+    NONE,
+    PICKUP,
+    DELIVER_OK,
+    DELIVER_WRONG
+  }
+}
