@@ -8,7 +8,7 @@ public record VehicleState(
     double y,
     double vx,
     double vy,
-    double rotation, 
+    double rotation,
     boolean isDashing,
     boolean isAccelerating,
     PromptType prompt) {
