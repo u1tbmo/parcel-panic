@@ -45,16 +45,18 @@ public final class GameRenderer {
   public void renderMap(GraphicsContext gc, TileMap map) {
     if (map == null) return;
 
-    for (int y = 0; y < map.getHeight(); y++) {
-      for (int x = 0; x < map.getWidth(); x++) {
-        TileType type = map.getTile(x, y);
-        Image img = getTextureForType(type);
+    // Fetch full layer images from the asset registry
+    Image outerGrass = assets.getImage(ImageKey.MAP_LAYER_GRASS);
+    Image buildings = assets.getImage(ImageKey.MAP_LAYER_BUILDINGS);
 
-        if (img != null) {
-          // Draw the image at grid coordinates multiplied by tile size
-          gc.drawImage(img, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        }
-      }
+    // Background Grass
+    if (outerGrass != null) {
+      gc.drawImage(outerGrass, 0, 0);
+    }
+
+    // Buildings & Foreground Structures
+    if (buildings != null) {
+      gc.drawImage(buildings, 0, 0);
     }
   }
 

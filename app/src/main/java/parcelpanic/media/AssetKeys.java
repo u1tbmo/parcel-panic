@@ -39,6 +39,10 @@ public final class AssetKeys {
     TILE_HUB("tiles/tile_0012.png"),
     TILE_TARGET("tiles/tile_0455.png"),
     VEHICLE_CAR("entities/car.png"),
+
+    MAP_LAYER_GRASS("map_renders/1_outergrass.png"),
+    MAP_LAYER_BUILDINGS("map_renders/2_buildings.png"),
+    
     ENTITY_PARCEL("entities/parcel.png"),
     EMOTE_CROSS("emotes/emote_cross.png");
     private final String path;
