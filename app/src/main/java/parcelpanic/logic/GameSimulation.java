@@ -39,7 +39,18 @@ public class GameSimulation {
   }
 
   public void addPlayer(int id, double x, double y) {
-    vehicles.put(id, new VehicleLogic(id, x, y));
+    double spawnX = 0;
+    double spawnY = 0;
+
+    // spawn at hub
+    if (hubLocations != null && !hubLocations.isEmpty()) {
+      // pick a random HUB tile
+      Point2D randomHub = hubLocations.get(random.nextInt(hubLocations.size()));
+  
+      spawnX = randomHub.getX() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
+      spawnY = randomHub.getY() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
+    }
+    vehicles.put(id, new VehicleLogic(id, spawnX, spawnY));
     interactionGauges.put(id, 0.0);
   }
 

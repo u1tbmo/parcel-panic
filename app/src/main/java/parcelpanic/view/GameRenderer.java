@@ -48,6 +48,19 @@ public final class GameRenderer {
     // Fetch full layer images from the asset registry
     Image outerGrass = assets.getImage(ImageKey.MAP_LAYER_GRASS);
     Image buildings = assets.getImage(ImageKey.MAP_LAYER_BUILDINGS);
+    Image obstacles = assets.getImage(ImageKey.MAP_LAYER_OBSTACLES);
+
+    var hubTiles = map.getTilesOfType(TileType.HUB);
+    for (Point2D tile : hubTiles) {
+      Image hubTileImg = getTextureForType(TileType.HUB);
+
+      if (hubTileImg != null) {
+        double renderX = tile.getX() * TILE_SIZE;
+        double renderY = tile.getY() * TILE_SIZE;
+        
+        gc.drawImage(hubTileImg, renderX, renderY);
+      }
+    }
 
     // Background Grass
     if (outerGrass != null) {
@@ -58,6 +71,12 @@ public final class GameRenderer {
     if (buildings != null) {
       gc.drawImage(buildings, 0, 0);
     }
+
+    // Obstacles
+    if (obstacles != null) {
+      gc.drawImage(obstacles, 0, 0);
+    } 
+
   }
 
   private void renderVehicles(GraphicsContext gc, GameState state) {
