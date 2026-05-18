@@ -57,7 +57,7 @@ public final class GameRenderer {
       if (hubTileImg != null) {
         double renderX = tile.getX() * TILE_SIZE;
         double renderY = tile.getY() * TILE_SIZE;
-        
+
         gc.drawImage(hubTileImg, renderX, renderY);
       }
     }
@@ -75,8 +75,7 @@ public final class GameRenderer {
     // Obstacles
     if (obstacles != null) {
       gc.drawImage(obstacles, 0, 0);
-    } 
-
+    }
   }
 
   private void renderVehicles(GraphicsContext gc, GameState state) {

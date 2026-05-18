@@ -46,7 +46,7 @@ public class GameSimulation {
     if (hubLocations != null && !hubLocations.isEmpty()) {
       // pick a random HUB tile
       Point2D randomHub = hubLocations.get(random.nextInt(hubLocations.size()));
-  
+
       spawnX = randomHub.getX() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
       spawnY = randomHub.getY() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
     }

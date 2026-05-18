@@ -43,7 +43,7 @@ public final class AssetKeys {
     MAP_LAYER_GRASS("map_renders/1_outergrass.png"),
     MAP_LAYER_BUILDINGS("map_renders/2_buildings.png"),
     MAP_LAYER_OBSTACLES("map_renders/3_obstacles.png"),
-    
+
     ENTITY_PARCEL("entities/parcel.png"),
     EMOTE_CROSS("emotes/emote_cross.png");
     private final String path;
