@@ -39,6 +39,10 @@ public class ClientConnection implements Runnable {
       System.out.println(
           "[Server] Client " + clientId + " connected from " + socket.getInetAddress());
 
+      // Send welcome message with assigned player ID
+      writer.write("WELCOME:" + (clientId + 1) + "\n");
+      writer.flush();
+
       // Main client loop: receive intents and send state
       String line;
       while (connected && (line = reader.readLine()) != null) {
@@ -58,6 +62,17 @@ public class ClientConnection implements Runnable {
       System.err.println("[Server] Client " + clientId + " connection error: " + e.getMessage());
     } finally {
       disconnect();
+    }
+  }
+
+  /// Notify the client that the match is starting.
+  public void sendStart() {
+    if (!connected) return;
+    try {
+      writer.write("START\n");
+      writer.flush();
+    } catch (IOException e) {
+      connected = false;
     }
   }
 

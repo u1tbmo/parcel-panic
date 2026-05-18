@@ -18,6 +18,7 @@ import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.UiFactory;
+import parcelpanic.net.LobbyScreen;
 import parcelpanic.screen.ContentScreen;
 import parcelpanic.screen.SelectionCursor;
 import parcelpanic.util.SmoothedValue;
@@ -189,7 +190,7 @@ public final class MenuScreen extends ContentScreen {
       case CONFIRM -> {
         ctx.audio().playSound(AudioKey.CLICK);
         switch (selectedItem) {
-          case START -> ctx.navigator().requestSwitch(new MatchScreen());
+          case START -> ctx.navigator().requestSwitch(new LobbyScreen());
           case OPTIONS -> ctx.navigator().requestSwitch(new OptionsScreen());
           case EXIT -> ctx.stage().close();
         }

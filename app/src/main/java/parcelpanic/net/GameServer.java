@@ -26,6 +26,7 @@ public class GameServer implements Runnable {
   private TileMap map;
   private final CopyOnWriteArrayList<ClientConnection> clients = new CopyOnWriteArrayList<>();
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private final AtomicBoolean matchStarted = new AtomicBoolean(false);
   private final Object clientCountLock = new Object();
 
   public GameServer() {}
@@ -36,7 +37,7 @@ public class GameServer implements Runnable {
     System.out.println("[Server] Initializing...");
 
     // Load the map (same as the client)
-    map = MapLoader.loadFromText("maps/map.txt");
+    map = MapLoader.loadFromText("/maps/map.txt");
     if (map == null) {
       throw new RuntimeException("Failed to load map");
     }
@@ -61,7 +62,7 @@ public class GameServer implements Runnable {
   private void acceptClients() {
     int nextClientId = 0;
 
-    while (running.get() && nextClientId < EXPECTED_CLIENTS) {
+    while (running.get() && !matchStarted.get() && nextClientId < EXPECTED_CLIENTS) {
       try {
         Socket clientSocket = serverSocket.accept();
         int clientId = nextClientId++;
@@ -90,16 +91,34 @@ public class GameServer implements Runnable {
       }
     }
 
-    System.out.println(
-        "[Server] All " + EXPECTED_CLIENTS + " clients connected. Starting game loop.");
+    System.out.println("[Server] Connection phase finished.");
+  }
+
+  public void startMatch() {
+    matchStarted.set(true);
+    synchronized (clientCountLock) {
+      clientCountLock.notifyAll();
+    }
+    broadcastStart();
+  }
+
+  public void broadcastStart() {
+    System.out.println("[Server] Broadcasting START to all clients!");
+    for (ClientConnection client : clients) {
+      client.sendStart();
+    }
+  }
+
+  public int getConnectedCount() {
+    return clients.size();
   }
 
   /// Main game loop: collect intents, simulate, broadcast state.
   @Override
   public void run() {
-    // Wait for all clients to connect
+    // Wait for the host to start the match
     synchronized (clientCountLock) {
-      while (clients.size() < EXPECTED_CLIENTS && running.get()) {
+      while (!matchStarted.get() && running.get()) {
         try {
           clientCountLock.wait(100);
         } catch (InterruptedException e) {
