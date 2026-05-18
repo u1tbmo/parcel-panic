@@ -31,6 +31,19 @@ public class GameClient {
     thread.start();
   }
 
+  public void startWithSocket(Socket socket, int playerId) throws IOException {
+    this.socket = socket;
+    this.playerId = playerId;
+    this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+    this.running = true;
+
+    // Listen for incoming states in background thread
+    Thread thread = new Thread(this::listen, "GameClient-Reader");
+    thread.setDaemon(true);
+    thread.start();
+  }
+
   private void listen() {
     try {
       String line;

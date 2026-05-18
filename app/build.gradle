@@ -43,3 +43,10 @@ spotless {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+tasks.register('runServer', JavaExec) {
+    group = 'application'
+    description = 'Runs the authoritative Game Server'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'parcelpanic.net.GameServer'
+}
