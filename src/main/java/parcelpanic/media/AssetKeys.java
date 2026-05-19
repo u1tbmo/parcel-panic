@@ -93,11 +93,11 @@ public final class AssetKeys {
 
   /// Enum of Fonts
   public enum FontKey {
-    DISPLAY("RadioCanadaBig-Bold", 96),
-    HEADLINE("RadioCanadaBig-Bold", 48),
-    TITLE("RadioCanadaBig-Medium", 36),
-    BODY("RadioCanadaBig-Regular", 16),
-    LABEL("RadioCanadaBig-Medium", 24),
+    DISPLAY("Gaegu-Bold", 96),
+    HEADLINE("Gaegu-Bold", 48),
+    TITLE("Gaegu-Regular", 36),
+    BODY("Gaegu-Regular", 16),
+    LABEL("Gaegu-Regular", 24),
     HINT("KenneyInputKeyboardMouse", 48);
 
     private final String family;
