@@ -1,5 +1,7 @@
 package parcelpanic.view;
 
+import java.util.HashMap;
+import java.util.Map;
 import javafx.geometry.Point2D;
 import javafx.geometry.VPos;
 import javafx.scene.canvas.GraphicsContext;
@@ -18,8 +20,6 @@ import parcelpanic.shared.VehicleState;
 import parcelpanic.shared.VehicleState.PromptType;
 import parcelpanic.world.TileMap;
 import parcelpanic.world.TileMap.TileType;
-import java.util.HashMap;
-import java.util.Map;
 
 public final class GameRenderer {
   private static final int TILE_SIZE = 40;
@@ -38,7 +38,8 @@ public final class GameRenderer {
     if (state == null) return;
 
     long now = System.nanoTime();
-    double dt = Math.min((now - lastRenderTimeNanos) / 1_000_000_000.0, 0.05);    lastRenderTimeNanos = now;
+    double dt = Math.min((now - lastRenderTimeNanos) / 1_000_000_000.0, 0.05);
+    lastRenderTimeNanos = now;
 
     gc.setImageSmoothing(false);
 
@@ -115,8 +116,7 @@ public final class GameRenderer {
 
       if (carSprite != null) {
         // srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH
-        gc.drawImage(
-            carSprite, frameIndex * 22, 0, 22, 22, renderX - 20, renderY - 20, 40, 40);
+        gc.drawImage(carSprite, frameIndex * 22, 0, 22, 22, renderX - 20, renderY - 20, 40, 40);
       }
 
       gc.restore();

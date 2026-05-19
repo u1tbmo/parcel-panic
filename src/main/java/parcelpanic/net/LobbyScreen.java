@@ -15,7 +15,6 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
@@ -41,7 +40,8 @@ public final class LobbyScreen extends ContentScreen {
   private enum Mode {
     CHOOSE,
     HOSTING,
-    JOINING
+    JOINING,
+    LOBBY
   }
 
   private enum ChooseItem {
@@ -76,11 +76,26 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private enum JoiningItem {
+    ENTER_IP("Enter Host IP"),
     BACK("Back");
 
     private final String text;
 
     JoiningItem(String text) {
+      this.text = text;
+    }
+
+    public String getText() {
+      return text;
+    }
+  }
+
+  private enum LobbyItem {
+    LEAVE("Leave Lobby");
+
+    private final String text;
+
+    LobbyItem(String text) {
       this.text = text;
     }
 
@@ -97,12 +112,13 @@ public final class LobbyScreen extends ContentScreen {
 
   private GameServer server;
   private java.net.Socket activeSocket;
+  private volatile boolean connectingToHost = false;
   private int lastPlayerCount = -1;
-  private boolean ipFieldFocused = true;
-  private TextField ipField;
   private Label statusLabel;
   private Label ipInfoLabel;
   private BorderPane rootPane;
+  private VBox menuContainer;
+  private String manualHostIp = "localhost";
   private String resolvedIp = "Detecting...";
 
   private Color textColor;
@@ -114,6 +130,10 @@ public final class LobbyScreen extends ContentScreen {
 
   private final LanDiscoveryService lanDiscovery = new LanDiscoveryService();
   private VBox discoveredServersBox;
+  private final List<String> discoveredServers = new ArrayList<>();
+  private final List<Label> discoveredServerLabels = new ArrayList<>();
+  private Label enterIpLabel;
+  private Label joinBackLabel;
 
   // Lobby Chat UI
   private VBox chatPanel;
@@ -211,11 +231,14 @@ public final class LobbyScreen extends ContentScreen {
   private void setMode(Mode newMode) {
     this.currentMode = newMode;
     this.selectedIndex = 0;
-    this.ipFieldFocused = (newMode == Mode.JOINING);
     this.lastPlayerCount = -1;
     this.offsets.clear();
 
     if (newMode == Mode.JOINING) {
+      this.discoveredServers.clear();
+      this.discoveredServerLabels.clear();
+      this.enterIpLabel = null;
+      this.joinBackLabel = null;
       startLanListening();
     } else {
       lanDiscovery.stop();
@@ -235,7 +258,8 @@ public final class LobbyScreen extends ContentScreen {
     return switch (currentMode) {
       case CHOOSE -> ChooseItem.values().length;
       case HOSTING -> HostingItem.values().length;
-      case JOINING -> JoiningItem.values().length;
+      case JOINING -> discoveredServers.size() + JoiningItem.values().length;
+      case LOBBY -> LobbyItem.values().length;
     };
   }
 
@@ -273,29 +297,49 @@ public final class LobbyScreen extends ContentScreen {
                     return;
                   }
 
-                  boolean alreadyExists =
-                      discoveredServersBox.getChildren().stream()
-                          .anyMatch(
-                              node -> node.getUserData() != null && node.getUserData().equals(ip));
-
-                  if (alreadyExists) {
+                  if (discoveredServers.contains(ip)) {
                     return;
                   }
 
-                  Button joinButton = new Button("Join " + ip);
-                  joinButton.setUserData(ip);
-                  joinButton.setStyle("-fx-font-size: 16px; -fx-padding: 8px 18px;");
-
-                  joinButton.setOnAction(
-                      e -> {
-                        if (ipField != null) {
-                          ipField.setText(ip);
-                        }
-                        connectToHost(ip);
-                      });
-
-                  discoveredServersBox.getChildren().add(joinButton);
+                  discoveredServers.add(ip);
+                  addDiscoveredServerLabel(ip);
+                  rebuildJoinItemLabels();
                 }));
+  }
+
+  private void addDiscoveredServerLabel(String ip) {
+    Font menuFont = ctx.assets().getFont(FontKey.TITLE);
+    Label label = UiFactory.createLabel(ip, menuFont, mutedColor);
+    label.setUserData(ip);
+    label.setOnMouseClicked(
+        e -> {
+          manualHostIp = ip;
+          connectToHost(ip);
+        });
+    discoveredServerLabels.add(label);
+    discoveredServersBox.getChildren().add(label);
+  }
+
+  private void rebuildJoinItemLabels() {
+    itemLabels.clear();
+    itemLabels.addAll(discoveredServerLabels);
+    if (enterIpLabel != null) {
+      itemLabels.add(enterIpLabel);
+    }
+    if (joinBackLabel != null) {
+      itemLabels.add(joinBackLabel);
+    }
+    int itemCount = getItemCount();
+
+    // Ensure we have enough offsets without clearing existing ones
+    for (int i = 0; i < itemCount; i++) {
+      offsets.putIfAbsent(i, new SmoothedValue(0.0, 0.5));
+    }
+
+    if (selectedIndex >= itemCount) {
+      selectedIndex = Math.max(0, itemCount - 1);
+    }
+    updateSelectionColors();
   }
 
   private void buildUI() {
@@ -317,8 +361,10 @@ public final class LobbyScreen extends ContentScreen {
       titleLabel = UiFactory.createTitle("Multiplayer Lobby", titleFont, textColor);
     } else if (currentMode == Mode.HOSTING) {
       titleLabel = UiFactory.createTitle("Hosting Game", titleFont, textColor);
-    } else {
+    } else if (currentMode == Mode.JOINING) {
       titleLabel = UiFactory.createTitle("Join Game", titleFont, textColor);
+    } else {
+      titleLabel = UiFactory.createTitle("Lobby", titleFont, textColor);
     }
 
     VBox topContainer = new VBox(titleLabel);
@@ -328,6 +374,7 @@ public final class LobbyScreen extends ContentScreen {
     VBox menuContainer = new VBox(20);
     menuContainer.setAlignment(Pos.CENTER_LEFT);
     menuContainer.setPadding(new Insets(0, 0, 0, 100));
+    this.menuContainer = menuContainer;
 
     if (currentMode == Mode.CHOOSE) {
       Label desc =
@@ -362,45 +409,39 @@ public final class LobbyScreen extends ContentScreen {
           UiFactory.createLabel(
               "Enter Host IP, or select a discovered LAN server", labelFont, textColor);
 
-      ipField = new TextField("localhost");
-      ipField.setMaxWidth(300);
-      ipField.setStyle("-fx-font-size: 16px; -fx-alignment: center;");
-      ipField
-          .focusedProperty()
-          .addListener(
-              (obs, oldVal, newVal) -> {
-                ipFieldFocused = newVal;
-                updateSelectionColors();
-              });
-      ipField.setOnKeyPressed(
-          event -> {
-            if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
-              event.consume();
-              connectToHost(ipField.getText());
-            } else if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
-              event.consume();
-              handleBack();
-            } else if (event.getCode() == javafx.scene.input.KeyCode.DOWN) {
-              event.consume();
-              if (rootPane != null) {
-                rootPane.requestFocus();
-              }
-            }
-          });
-      Platform.runLater(() -> ipField.requestFocus());
-
-      VBox fieldBox = new VBox(15, statusLabel, ipField);
+      VBox fieldBox = new VBox(15, statusLabel);
       fieldBox.setAlignment(Pos.CENTER);
       fieldBox.setPadding(new Insets(0, 0, 20, 0));
 
       Label lanLabel = UiFactory.createLabel("LAN Servers", labelFont, selectedColor);
 
       discoveredServersBox = new VBox(10);
-      discoveredServersBox.setAlignment(Pos.CENTER);
+      discoveredServersBox.setPadding(new Insets(0, 0, 0, 20));
+      discoveredServersBox.setAlignment(Pos.CENTER_LEFT);
+
+      discoveredServerLabels.clear();
+      for (String ip : discoveredServers) {
+        addDiscoveredServerLabel(ip);
+      }
 
       menuContainer.getChildren().addAll(fieldBox, lanLabel, discoveredServersBox);
 
-      for (JoiningItem item : JoiningItem.values()) {
+      enterIpLabel = UiFactory.createLabel(JoiningItem.ENTER_IP.getText(), menuFont, textColor);
+      menuContainer.getChildren().add(enterIpLabel);
+
+      joinBackLabel = UiFactory.createLabel(JoiningItem.BACK.getText(), menuFont, textColor);
+      menuContainer.getChildren().add(joinBackLabel);
+
+      rebuildJoinItemLabels();
+    } else if (currentMode == Mode.LOBBY) {
+      statusLabel =
+          UiFactory.createLabel(
+              "Connected! Waiting for host to start the match...", labelFont, textColor);
+      VBox statusBox = new VBox(12, statusLabel);
+      statusBox.setAlignment(Pos.CENTER_LEFT);
+      menuContainer.getChildren().add(statusBox);
+
+      for (LobbyItem item : LobbyItem.values()) {
         Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
         itemLabels.add(label);
         menuContainer.getChildren().add(label);
@@ -430,7 +471,7 @@ public final class LobbyScreen extends ContentScreen {
     HBox hintsRow = new HBox(40, navigateHint, selectHint);
     hintsRow.setAlignment(Pos.CENTER);
 
-    if (currentMode == Mode.HOSTING || (currentMode == Mode.JOINING && activeSocket != null)) {
+    if (currentMode == Mode.HOSTING || currentMode == Mode.LOBBY) {
       Node chatHint =
           UiFactory.createHint(
               InputHintProvider.getIcon(KeyCode.T),
@@ -447,7 +488,7 @@ public final class LobbyScreen extends ContentScreen {
 
     rootPane.setTop(topContainer);
 
-    if (currentMode == Mode.HOSTING || (currentMode == Mode.JOINING && activeSocket != null)) {
+    if (currentMode == Mode.HOSTING || currentMode == Mode.LOBBY) {
       VBox chatSide = buildChatPanel();
       HBox splitBox = new HBox(40);
       splitBox.setAlignment(Pos.CENTER);
@@ -472,12 +513,7 @@ public final class LobbyScreen extends ContentScreen {
       if (i < itemLabels.size()) {
         Label label = itemLabels.get(i);
         if (label != null) {
-          boolean highlighted = false;
-          if (currentMode == Mode.JOINING) {
-            highlighted = !ipFieldFocused;
-          } else {
-            highlighted = (i == selectedIndex);
-          }
+          boolean highlighted = (i == selectedIndex);
           label.setTextFill(highlighted ? selectedColor : mutedColor);
         }
       }
@@ -534,6 +570,7 @@ public final class LobbyScreen extends ContentScreen {
 
   private void stopHosting() {
     closeActiveSocket();
+    connectingToHost = false;
     if (server != null) {
       server.stop();
       server = null;
@@ -543,13 +580,14 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private void connectToHost(String ip) {
+    if (connectingToHost) {
+      return;
+    }
+    connectingToHost = true;
     Platform.runLater(
         () -> {
           if (statusLabel != null) {
             statusLabel.setText("Connecting to " + ip + "...");
-          }
-          if (ipField != null) {
-            ipField.setDisable(true);
           }
         });
 
@@ -564,14 +602,14 @@ public final class LobbyScreen extends ContentScreen {
 
                 Platform.runLater(
                     () -> {
-                      buildUI();
-                      if (statusLabel != null) {
-                        if (server != null) {
+                      if (server != null) {
+                        buildUI();
+                        if (statusLabel != null) {
                           statusLabel.setText(
                               "Lobby Live! Ask players to connect to: " + resolvedIp);
-                        } else {
-                          statusLabel.setText("Connected! Waiting for host to start...");
                         }
+                      } else {
+                        setMode(Mode.LOBBY);
                       }
                     });
 
@@ -601,7 +639,6 @@ public final class LobbyScreen extends ContentScreen {
                             if (statusLabel != null) {
                               statusLabel.setText("Failed to start client: " + ex.getMessage());
                             }
-                            if (ipField != null) ipField.setDisable(false);
                           }
                         });
                     return;
@@ -614,11 +651,11 @@ public final class LobbyScreen extends ContentScreen {
                 Platform.runLater(
                     () -> {
                       closeActiveSocket();
-                      buildUI();
+                      connectingToHost = false;
                       if (server == null) {
                         ctx.navigator().push(new parcelpanic.screens.KickOverlay("Host Exited"));
                       }
-                      if (ipField != null) ipField.setDisable(false);
+                      setMode(Mode.CHOOSE);
                     });
               } catch (Exception e) {
                 System.err.println("[LobbyScreen] Lobby-Connector thread encountered exception:");
@@ -633,7 +670,7 @@ public final class LobbyScreen extends ContentScreen {
                     () -> {
                       boolean wasConnected = (activeSocket != null);
                       closeActiveSocket();
-                      buildUI();
+                      connectingToHost = false;
                       if (wasConnected && server == null) {
                         ctx.navigator().push(new parcelpanic.screens.KickOverlay("Host Exited"));
                       } else {
@@ -641,7 +678,9 @@ public final class LobbyScreen extends ContentScreen {
                           statusLabel.setText("Connection failed: " + e.getMessage());
                         }
                       }
-                      if (ipField != null) ipField.setDisable(false);
+                      if (server == null) {
+                        setMode(Mode.CHOOSE);
+                      }
                     });
               }
             },
@@ -668,9 +707,24 @@ public final class LobbyScreen extends ContentScreen {
         case CANCEL_HOST -> stopHosting();
       }
     } else if (currentMode == Mode.JOINING) {
-      JoiningItem item = JoiningItem.values()[selectedIndex];
+      if (selectedIndex < discoveredServers.size()) {
+        String ip = discoveredServers.get(selectedIndex);
+        manualHostIp = ip;
+        connectToHost(ip);
+        return;
+      }
+
+      if (selectedIndex == discoveredServers.size()) {
+        openManualIpOverlay();
+        return;
+      }
+
+      closeActiveSocket();
+      setMode(Mode.CHOOSE);
+    } else if (currentMode == Mode.LOBBY) {
+      LobbyItem item = LobbyItem.values()[selectedIndex];
       switch (item) {
-        case BACK -> {
+        case LEAVE -> {
           closeActiveSocket();
           setMode(Mode.CHOOSE);
         }
@@ -678,12 +732,161 @@ public final class LobbyScreen extends ContentScreen {
     }
   }
 
+  private void openManualIpOverlay() {
+    ctx.navigator().push(
+        new HostIpOverlay(
+            manualHostIp,
+            ip -> {
+              manualHostIp = ip;
+              connectToHost(ip);
+            }));
+  }
+
+  private final class HostIpOverlay implements parcelpanic.screen.Screen {
+    private final String initialIp;
+    private final java.util.function.Consumer<String> onConfirm;
+    private BorderPane overlayRoot;
+    private TextField ipField;
+
+    private HostIpOverlay(String initialIp, java.util.function.Consumer<String> onConfirm) {
+      this.initialIp = initialIp;
+      this.onConfirm = onConfirm;
+    }
+
+    @Override
+    public void enter(parcelpanic.runtime.AppContext ctx) {
+      Color surface = ctx.assets().getColor(ColorKey.SURFACE_BLACK);
+      Color text = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
+      Color muted = ctx.assets().getColor(ColorKey.TEXT_MUTED);
+      Color accent = ctx.assets().getColor(ColorKey.SUCCESS);
+
+      overlayRoot =
+          UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+      overlayRoot.setBackground(
+          UiFactory.createOverlay(surface, 0.88, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
+              .getBackground());
+
+      Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
+      Font labelFont = ctx.assets().getFont(FontKey.TITLE);
+
+      Label title = UiFactory.createTitle("Enter Host IP", titleFont, text);
+      VBox topContainer = new VBox(title);
+      topContainer.setAlignment(Pos.TOP_CENTER);
+      topContainer.setPadding(new Insets(80, 0, 0, 0));
+
+      Label helper = UiFactory.createLabel("Type the host IP and press Enter", labelFont, muted);
+      ipField = new TextField(initialIp);
+      ipField.setPromptText("e.g. 192.168.1.10");
+      ipField.setMaxWidth(320);
+      ipField.setStyle(
+          String.format(
+              "-fx-font-size: 18px; -fx-alignment: center; -fx-text-fill: %s;"
+                  + " -fx-prompt-text-fill: %s; -fx-control-inner-background: %s;"
+                  + " -fx-background-color: %s; -fx-border-color: %s; -fx-border-width: 2px;"
+                  + " -fx-background-radius: 10px; -fx-border-radius: 10px;"
+                  + " -fx-padding: 8px 12px;",
+              toCssColor(text),
+              toCssColor(muted),
+              toCssColor(surface, 0.85),
+              toCssColor(surface, 0.92),
+              toCssColor(accent)));
+      ipField.setOnKeyPressed(
+          event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+              event.consume();
+              confirm();
+            } else if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+              event.consume();
+              cancel();
+            }
+          });
+
+      VBox center = new VBox(16, helper, ipField);
+      center.setAlignment(Pos.CENTER);
+
+      Font hintFont = ctx.assets().getFont(FontKey.LABEL);
+      Font iconFont = ctx.assets().getFont(FontKey.HINT);
+      Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
+
+      Node enterHint =
+          UiFactory.createHint(
+              InputHintProvider.getIcon(KeyCode.ENTER), "Confirm", iconFont, hintFont, hintColor);
+      Node escHint =
+          UiFactory.createHint(
+              InputHintProvider.getIcon(KeyCode.ESCAPE), "Cancel", iconFont, hintFont, hintColor);
+      HBox hintsRow = new HBox(40, enterHint, escHint);
+      hintsRow.setAlignment(Pos.CENTER);
+      VBox bottomContainer = new VBox(20, hintsRow);
+      bottomContainer.setAlignment(Pos.BOTTOM_CENTER);
+      bottomContainer.setPadding(new Insets(0, 0, 60, 0));
+
+      overlayRoot.setTop(topContainer);
+      overlayRoot.setCenter(center);
+      overlayRoot.setBottom(bottomContainer);
+      overlayRoot.setFocusTraversable(true);
+
+      Platform.runLater(() -> ipField.requestFocus());
+    }
+
+    @Override
+    public void exit() {
+      overlayRoot = null;
+      ipField = null;
+    }
+
+    @Override
+    public Node getRoot() {
+      return overlayRoot;
+    }
+
+    @Override
+    public void fixedUpdate(double dtSeconds) {}
+
+    @Override
+    public void render(double alpha) {}
+
+    @Override
+    public void onKeyPressed(InputAction action) {}
+
+    @Override
+    public void onRawKeyPressed(KeyCode code) {}
+
+    @Override
+    public boolean suppressActionBindings() {
+      return true;
+    }
+
+    private void confirm() {
+      if (ipField != null) {
+        String value = ipField.getText();
+        onConfirm.accept(value == null ? "" : value.trim());
+      }
+      ctx.navigator().pop();
+    }
+
+    private void cancel() {
+      ctx.navigator().pop();
+    }
+  }
+
+  private static String toCssColor(Color color) {
+    return toCssColor(color, color.getOpacity());
+  }
+
+  private static String toCssColor(Color color, double opacity) {
+    int r = (int) Math.round(color.getRed() * 255.0);
+    int g = (int) Math.round(color.getGreen() * 255.0);
+    int b = (int) Math.round(color.getBlue() * 255.0);
+    double a = Math.max(0.0, Math.min(1.0, opacity));
+    return String.format("rgba(%d,%d,%d,%.2f)", r, g, b, a);
+  }
+
   private void handleBack() {
     if (currentMode == Mode.CHOOSE) {
       ctx.navigator().requestSwitch(new parcelpanic.screens.MenuScreen());
     } else if (currentMode == Mode.HOSTING) {
       stopHosting();
-    } else if (currentMode == Mode.JOINING) {
+    } else if (currentMode == Mode.JOINING || currentMode == Mode.LOBBY) {
       closeActiveSocket();
       setMode(Mode.CHOOSE);
     }
@@ -698,15 +901,9 @@ public final class LobbyScreen extends ContentScreen {
   public void onKeyPressed(InputAction action) {
     switch (action) {
       case UI_UP -> {
-        if (currentMode == Mode.JOINING && ipField != null) {
-          ipFieldFocused = true;
-          updateSelectionColors();
-          ipField.requestFocus();
-        } else {
-          int count = getItemCount();
-          selectedIndex = (selectedIndex - 1 + count) % count;
-          ctx.audio().playSound(AudioKey.MOVE_SELECTION);
-        }
+        int count = getItemCount();
+        selectedIndex = (selectedIndex - 1 + count) % count;
+        ctx.audio().playSound(AudioKey.MOVE_SELECTION);
       }
       case UI_DOWN -> {
         int count = getItemCount();
@@ -835,6 +1032,7 @@ public final class LobbyScreen extends ContentScreen {
   @Override
   protected void onBeforeExit() {
     lanDiscovery.stop();
+    connectingToHost = false;
 
     if (!socketHandedOffToGame) {
       closeActiveSocket();

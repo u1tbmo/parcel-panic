@@ -5,14 +5,13 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.PlayerIntent;
-
 
 /// Represents a single client connected to the server. Each connection runs in its own thread and
 /// handles receiving PlayerIntent from the client and sending GameState back.
@@ -56,8 +55,7 @@ public class ClientConnection implements Runnable {
         // Parse incoming message
         if (line.startsWith("INTENT:")) {
           String encodedJson = line.substring(7); // Remove "INTENT:" prefix
-          String json =
-              new String(Base64.getDecoder().decode(encodedJson), StandardCharsets.UTF_8);
+          String json = new String(Base64.getDecoder().decode(encodedJson), StandardCharsets.UTF_8);
 
           PlayerIntent intent = Serializer.deserializePlayerIntent(json);
           if (intent != null) {
@@ -146,16 +144,18 @@ public class ClientConnection implements Runnable {
 
     connected = false;
     try {
-      if (reader != null) reader.close();
-      if (writer != null) writer.close();
-      if (socket != null) socket.close();
+      if (socket != null && !socket.isClosed()) {
+        socket.close();
+      }
     } catch (IOException e) {
       System.err.println(
           "[Server] Error closing client " + clientId + " socket: " + e.getMessage());
     }
 
     System.out.println("[Server] Client " + clientId + " disconnected");
-    server.broadcastChatMessage("[System] Player " + (clientId + 1) + " has left the lobby.");
+    if (server.isRunning()) {
+      server.broadcastChatMessage("[System] Player " + (clientId + 1) + " has left the lobby.");
+    }
     server.clientDisconnected(clientId);
   }
 }

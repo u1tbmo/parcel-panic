@@ -1,8 +1,8 @@
 package parcelpanic.view;
 
 /**
- * Smoothly interpolates an entity's render position.
- * Prevents visual snapping between network updates.
+ * Smoothly interpolates an entity's render position. Prevents visual snapping between network
+ * updates.
  */
 public final class EntityInterpolator {
   private double previousX;

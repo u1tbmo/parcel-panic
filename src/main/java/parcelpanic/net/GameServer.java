@@ -142,6 +142,10 @@ public class GameServer implements Runnable {
     return clients.size();
   }
 
+  public boolean isRunning() {
+    return running.get();
+  }
+
   /// Main game loop: collect intents, simulate, broadcast state.
   @Override
   public void run() {
@@ -230,17 +234,29 @@ public class GameServer implements Runnable {
 
   /// Stop the server and clean up.
   public void stop() {
-    running.set(false);
+    if (!running.getAndSet(false)) {
+      return;
+    }
+
+    System.out.println("[Server] Stopping server...");
 
     if (activeServer == this) {
       activeServer = null;
     }
 
-    // Disconnect all clients
-    for (ClientConnection client : clients) {
-      client.disconnect();
-    }
+    // Capture and clear clients immediately to prevent further broadcasts from other threads
+    List<ClientConnection> toDisconnect = new ArrayList<>(clients);
     clients.clear();
+
+    // Disconnect each client in a separate thread if possible, or just close sockets
+    // Since we're often on the UI thread, we want this to be as fast as possible.
+    for (ClientConnection client : toDisconnect) {
+      try {
+        client.disconnect();
+      } catch (Exception e) {
+        System.err.println("[Server] Error disconnecting client during shutdown: " + e.getMessage());
+      }
+    }
 
     cleanup();
   }
