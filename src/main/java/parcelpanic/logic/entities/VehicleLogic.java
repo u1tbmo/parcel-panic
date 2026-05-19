@@ -18,6 +18,7 @@ public class VehicleLogic {
 
   private double dashCooldown = 0;
   private double pickupCooldown = 0;
+  private boolean hasParcel = false;
   private boolean isDashing = false;
   private boolean isAccelerating = false;
   private VehicleState.PromptType prompt = VehicleState.PromptType.NONE;
@@ -29,6 +30,14 @@ public class VehicleLogic {
     this.y = y;
   }
 
+  public void setHasParcel(boolean hasParcel) {
+    this.hasParcel = hasParcel;
+  }
+
+  public boolean hasParcel() {
+    return hasParcel;
+  }
+
   public void triggerPickupCooldown() {
     this.pickupCooldown = MatchRules.PICKUP_COOLDOWN_TIME;
   }
@@ -38,7 +47,7 @@ public class VehicleLogic {
   }
 
   public boolean canPickup() {
-    return pickupCooldown <= 0;
+    return pickupCooldown <= 0 && !hasParcel;
   }
 
   private double approach(double current, double target, double maxDelta) {

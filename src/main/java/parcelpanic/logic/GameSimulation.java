@@ -100,6 +100,12 @@ public class GameSimulation {
 
       if (parcel.update(dt)) {
         unhappiness = MatchRules.calculatePenalty(unhappiness);
+        if (parcel.currentState() == ParcelLogic.State.CARRIED) {
+          VehicleLogic carrier = vehicles.get(parcel.carrierId());
+          if (carrier != null) {
+            carrier.setHasParcel(false);
+          }
+        }
         parcels.remove(i);
         continue;
       }
@@ -142,6 +148,7 @@ public class GameSimulation {
         double progress = interactionGauges.get(vehicle.id()) + dt;
         if (progress >= MatchRules.INTERACT_TIME_REQUIRED) {
           nearby.pickup(vehicle.id());
+          vehicle.setHasParcel(true);
           interactionGauges.put(vehicle.id(), 0.0);
         } else {
           interactionGauges.put(vehicle.id(), progress);
@@ -172,6 +179,7 @@ public class GameSimulation {
               if (p.targetHouseId() == currentZoneId) {
                 score += MatchRules.calculateDeliveryScore(p.remainingTime());
                 parcels.remove(i);
+                vehicle.setHasParcel(false);
                 break;
               }
             }
@@ -246,6 +254,7 @@ public class GameSimulation {
           double vx = Math.sin(rad) * throwSpeed;
           double vy = -Math.cos(rad) * throwSpeed;
           p.launch(vehicle.x(), vehicle.y(), vx, vy);
+          vehicle.setHasParcel(false);
           vehicle.triggerPickupCooldown();
           break;
         }
@@ -261,6 +270,7 @@ public class GameSimulation {
       double dist = Math.hypot(parcel.x() - vehicle.x(), parcel.y() - vehicle.y());
       if (dist < MatchRules.INTERACT_RANGE) {
         parcel.pickup(vehicle.id());
+        vehicle.setHasParcel(true);
         return;
       }
     }
