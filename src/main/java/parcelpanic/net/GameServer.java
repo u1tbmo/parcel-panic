@@ -177,6 +177,7 @@ public class GameServer implements Runnable {
   }
 
   public int getConnectedCount() {
+    clients.removeIf(client -> !client.isConnected());
     return clients.size();
   }
 
@@ -260,6 +261,9 @@ public class GameServer implements Runnable {
   /// Called by ClientConnection when a client disconnects.
   public void clientDisconnected(int clientId) {
     System.out.println("[Server] Client " + clientId + " disconnected");
+
+    clients.removeIf(client -> client.getClientId() == clientId);
+
     if (simulation != null) {
       simulation.removePlayer(clientId);
     }

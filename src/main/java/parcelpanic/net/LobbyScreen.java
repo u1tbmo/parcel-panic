@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javafx.application.Platform;
@@ -39,6 +40,7 @@ import parcelpanic.screen.ContentScreen;
 import parcelpanic.screens.MatchScreen;
 import parcelpanic.util.SmoothedValue;
 import parcelpanic.video.VideoManager;
+import java.util.Random;
 
 /// A premium, fully keyboard-navigable Lobby UI that matches the home screen selection style.
 public final class LobbyScreen extends ContentScreen {
@@ -121,7 +123,7 @@ public final class LobbyScreen extends ContentScreen {
   private int myColorIndex = 1; // Default to Red, Style 1
 
   private GameServer server;
-  private java.net.Socket activeSocket;
+  private Socket activeSocket;
   private volatile boolean connectingToHost = false;
   private int lastPlayerCount = -1;
   private Label statusLabel;
@@ -140,7 +142,8 @@ public final class LobbyScreen extends ContentScreen {
 
   private final LanDiscoveryService lanDiscovery = new LanDiscoveryService();
   private VBox discoveredServersBox;
-  private final List<String> discoveredServers = new ArrayList<>();
+  private final Map<String, LanDiscoveryService.DiscoveredServer> discoveredServers =
+      new LinkedHashMap<>();
   private final List<Label> discoveredServerLabels = new ArrayList<>();
   private Label enterIpLabel;
   private Label joinBackLabel;
@@ -150,6 +153,21 @@ public final class LobbyScreen extends ContentScreen {
   private VBox chatMessagesContainer;
   private ScrollPane chatScrollPane;
   private TextField chatInputField;
+  private final Map<String, Color> playerChatColors = new HashMap<>();
+
+  private final Color[] chatPalette =
+    new Color[] {
+      Color.web("#ff7675"),
+      Color.web("#74b9ff"),
+      Color.web("#55efc4"),
+      Color.web("#ffeaa7"),
+      Color.web("#a29bfe"),
+      Color.web("#fd79a8"),
+      Color.web("#81ecec"),
+      Color.web("#fab1a0")
+    };
+
+private final Random chatRandom = new Random();
 
   @Override
   protected VideoManager.ViewportMode viewportMode() {
@@ -233,12 +251,10 @@ public final class LobbyScreen extends ContentScreen {
     this.activePlayers.clear();
 
     if (newMode == Mode.JOINING) {
-      this.discoveredServers.clear();
-      this.discoveredServerLabels.clear();
       this.enterIpLabel = null;
       this.joinBackLabel = null;
       startLanListening();
-    } else {
+    } else if (newMode != Mode.HOSTING) {
       lanDiscovery.stop();
     }
 
@@ -288,34 +304,61 @@ public final class LobbyScreen extends ContentScreen {
 
   private void startLanListening() {
     lanDiscovery.startListening(
-        ip ->
+        discoveredServer ->
             Platform.runLater(
                 () -> {
                   if (currentMode != Mode.JOINING || discoveredServersBox == null) {
                     return;
                   }
 
-                  if (discoveredServers.contains(ip)) {
-                    return;
-                  }
-
-                  discoveredServers.add(ip);
-                  addDiscoveredServerLabel(ip);
+                  discoveredServers.put(discoveredServer.ip(), discoveredServer);
+                  updateOrCreateDiscoveredServerLabel(discoveredServer);
                   rebuildJoinItemLabels();
                 }));
   }
 
-  private void addDiscoveredServerLabel(String ip) {
+  private void updateOrCreateDiscoveredServerLabel(
+      LanDiscoveryService.DiscoveredServer serverInfo) {
+    String ip = serverInfo.ip();
+
+    Label existing =
+        discoveredServerLabels.stream()
+            .filter(label -> ip.equals(label.getUserData()))
+            .findFirst()
+            .orElse(null);
+
+    String text =
+        serverInfo.isFull()
+            ? "FULL  " + ip + "  (" + serverInfo.currentPlayers() + "/"
+                + serverInfo.maxPlayers() + ")"
+            : "JOIN  " + ip + "  (" + serverInfo.currentPlayers() + "/"
+                + serverInfo.maxPlayers() + ")";
+
+    if (existing != null) {
+      existing.setText(text);
+      existing.setDisable(serverInfo.isFull());
+      return;
+    }
+
     Font menuFont = ctx.assets().getFont(FontKey.TITLE);
-    Label label = UiFactory.createLabel(ip, menuFont, mutedColor);
+    Label label = UiFactory.createLabel(text, menuFont, mutedColor);
     label.setUserData(ip);
+    label.setDisable(serverInfo.isFull());
+
     label.setOnMouseClicked(
         e -> {
-          manualHostIp = ip;
-          connectToHost(ip);
+          LanDiscoveryService.DiscoveredServer latest = discoveredServers.get(ip);
+          if (latest != null && !latest.isFull()) {
+            manualHostIp = ip;
+            connectToHost(ip);
+          }
         });
+
     discoveredServerLabels.add(label);
-    discoveredServersBox.getChildren().add(label);
+
+    if (discoveredServersBox != null) {
+      discoveredServersBox.getChildren().add(label);
+    }
   }
 
   private void rebuildJoinItemLabels() {
@@ -327,9 +370,9 @@ public final class LobbyScreen extends ContentScreen {
     if (joinBackLabel != null) {
       itemLabels.add(joinBackLabel);
     }
+
     int itemCount = getItemCount();
 
-    // Ensure we have enough offsets without clearing existing ones
     for (int i = 0; i < itemCount; i++) {
       offsets.putIfAbsent(i, new SmoothedValue(0.0, 0.5));
     }
@@ -417,9 +460,7 @@ public final class LobbyScreen extends ContentScreen {
 
     } else if (currentMode == Mode.HOSTING) {
       statusLabel = UiFactory.createLabel("Starting local server...", labelFont, textColor);
-      ipInfoLabel =
-          UiFactory.createLabel(
-              "IP: " + resolvedIp, labelFont, selectedColor);
+      ipInfoLabel = UiFactory.createLabel("IP: " + resolvedIp, labelFont, selectedColor);
 
       VBox infoBox = new VBox(10, statusLabel, ipInfoLabel);
       infoBox.setPadding(new Insets(0, 0, 10, 0));
@@ -444,15 +485,15 @@ public final class LobbyScreen extends ContentScreen {
       fieldBox.setAlignment(Pos.CENTER);
       fieldBox.setPadding(new Insets(0, 0, 20, 0));
 
-      Label lanLabel = UiFactory.createLabel("LAN Servers", labelFont, selectedColor);
+      Label lanLabel = UiFactory.createLabel("LAN Servers", labelFont, textColor);
 
       discoveredServersBox = new VBox(10);
       discoveredServersBox.setPadding(new Insets(0, 0, 0, 20));
       discoveredServersBox.setAlignment(Pos.CENTER_LEFT);
 
       discoveredServerLabels.clear();
-      for (String ip : discoveredServers) {
-        addDiscoveredServerLabel(ip);
+      for (LanDiscoveryService.DiscoveredServer serverInfo : discoveredServers.values()) {
+        updateOrCreateDiscoveredServerLabel(serverInfo);
       }
 
       menuContainer.getChildren().addAll(fieldBox, lanLabel, discoveredServersBox);
@@ -513,11 +554,7 @@ public final class LobbyScreen extends ContentScreen {
     if (currentMode == Mode.HOSTING || currentMode == Mode.LOBBY) {
       Node chatHint =
           UiFactory.createHint(
-              InputHintProvider.getIcon(KeyCode.T),
-              "Chat",
-              iconFont,
-              hintFont,
-              hintColor);
+              InputHintProvider.getIcon(KeyCode.T), "Chat", iconFont, hintFont, hintColor);
       hintsRow.getChildren().add(chatHint);
     }
 
@@ -677,13 +714,20 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private void updateSelectionColors() {
-    int itemCount = getItemCount();
-    for (int i = 0; i < itemCount; i++) {
-      if (i < itemLabels.size()) {
-        Label label = itemLabels.get(i);
-        if (label != null) {
-          boolean highlighted = (i == selectedIndex);
-          label.setTextFill(highlighted ? selectedColor : mutedColor);
+    for (int i = 0; i < itemLabels.size(); i++) {
+      Label label = itemLabels.get(i);
+
+      if (label != null) {
+        boolean highlighted = (i == selectedIndex);
+
+        label.setTextFill(highlighted ? selectedColor : mutedColor);
+      }
+    }
+
+    if (discoveredServersBox != null) {
+      for (Node node : discoveredServersBox.getChildren()) {
+        if (node instanceof Label label && !itemLabels.contains(label)) {
+          label.setTextFill(textColor);
         }
       }
     }
@@ -697,7 +741,11 @@ public final class LobbyScreen extends ContentScreen {
               try {
                 server = new GameServer();
                 server.start();
-                lanDiscovery.startBroadcasting(resolvedIp);
+
+                lanDiscovery.startBroadcasting(
+                    resolvedIp,
+                    () -> server != null ? server.getConnectedCount() : 0,
+                    4);
 
                 Platform.runLater(
                     () -> {
@@ -889,14 +937,19 @@ public final class LobbyScreen extends ContentScreen {
         case CANCEL_HOST -> stopHosting();
       }
     } else if (currentMode == Mode.JOINING) {
-      if (selectedIndex < discoveredServers.size()) {
-        String ip = discoveredServers.get(selectedIndex);
-        manualHostIp = ip;
-        connectToHost(ip);
+      if (selectedIndex < discoveredServerLabels.size()) {
+        Label selectedServerLabel = discoveredServerLabels.get(selectedIndex);
+        String ip = (String) selectedServerLabel.getUserData();
+
+        LanDiscoveryService.DiscoveredServer selectedServer = discoveredServers.get(ip);
+        if (selectedServer != null && !selectedServer.isFull()) {
+          manualHostIp = ip;
+          connectToHost(ip);
+        }
         return;
       }
 
-      if (selectedIndex == discoveredServers.size()) {
+      if (selectedIndex == discoveredServerLabels.size()) {
         openManualIpOverlay();
         return;
       }
@@ -913,6 +966,7 @@ public final class LobbyScreen extends ContentScreen {
         }
         case LEAVE -> {
           closeActiveSocket();
+          connectingToHost = false;
           setMode(Mode.CHOOSE);
         }
       }
@@ -950,7 +1004,8 @@ public final class LobbyScreen extends ContentScreen {
       overlayRoot =
           UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
       overlayRoot.setBackground(
-          UiFactory.createOverlay(surface, 0.88, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
+          UiFactory.createOverlay(
+                  surface, 0.88, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
               .getBackground());
 
       Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
@@ -979,10 +1034,10 @@ public final class LobbyScreen extends ContentScreen {
               toCssColor(accent)));
       ipField.setOnKeyPressed(
           event -> {
-            if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+            if (event.getCode() == KeyCode.ENTER) {
               event.consume();
               confirm();
-            } else if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+            } else if (event.getCode() == KeyCode.ESCAPE) {
               event.consume();
               cancel();
             }
@@ -1075,6 +1130,7 @@ public final class LobbyScreen extends ContentScreen {
       stopHosting();
     } else if (currentMode == Mode.JOINING || currentMode == Mode.LOBBY) {
       closeActiveSocket();
+      connectingToHost = false;
       setMode(Mode.CHOOSE);
     }
   }
@@ -1172,18 +1228,16 @@ public final class LobbyScreen extends ContentScreen {
     chatPanel.setPadding(new Insets(10, 15, 10, 15));
     chatPanel.setAlignment(Pos.TOP_CENTER);
     chatPanel.setStyle(
-        "-fx-background-color: rgba(255, 255, 255, 0.05);"
-            + " -fx-border-color: rgba(255, 255, 255, 0.1);"
-            + " -fx-border-width: 1px;"
-            + " -fx-border-radius: 8px;"
-            + " -fx-background-radius: 8px;");
+        "-fx-background-color: rgba(30, 30, 30, 0.65);"
+            + " -fx-background-radius: 12px;"
+            + " -fx-border-color: rgba(255, 255, 255, 0.15);"
+            + " -fx-border-radius: 12px;"
+            + " -fx-border-width: 1px;");
 
-    // Title
     Font titleFont = ctx.assets().getFont(FontKey.TITLE);
     Label chatTitle = UiFactory.createLabel("LOBBY CHAT", titleFont, selectedColor);
     chatTitle.setAlignment(Pos.CENTER);
 
-    // Messages Container inside ScrollPane
     chatMessagesContainer = new VBox(8);
     chatMessagesContainer.setAlignment(Pos.TOP_LEFT);
 
@@ -1200,7 +1254,6 @@ public final class LobbyScreen extends ContentScreen {
     chatScrollPane.setStyle(
         "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
 
-    // Input text field
     chatInputField = new TextField();
     chatInputField.setPromptText("Press Enter to send message...");
     chatInputField.setPrefWidth(380);
@@ -1215,7 +1268,6 @@ public final class LobbyScreen extends ContentScreen {
 
     chatInputField.setOnAction(e -> sendChat());
 
-    // Prevent navigation keys from bubbling when typing in chat
     chatInputField.setOnKeyPressed(
         event -> {
           if (event.getCode() == KeyCode.ESCAPE) {
@@ -1229,24 +1281,41 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private void addChatMessage(String msg) {
-    if (chatMessagesContainer == null || chatScrollPane == null) return;
-
-    Font chatFont = ctx.assets().getFont(FontKey.LABEL);
-    Label messageLabel = new Label(msg);
-    messageLabel.setFont(chatFont);
-    messageLabel.setWrapText(true);
-    messageLabel.setMaxWidth(380);
-
-    if (msg.startsWith(">>>")) {
-      messageLabel.setTextFill(selectedColor);
-      messageLabel.setStyle("-fx-font-weight: bold;");
-    } else {
-      messageLabel.setTextFill(textColor);
+    if (chatMessagesContainer == null || chatScrollPane == null) {
+      return;
     }
 
-    chatMessagesContainer.getChildren().add(messageLabel);
+    Font chatFont = ctx.assets().getFont(FontKey.LABEL);
 
-    // Auto scroll to bottom
+    String username = "Player";
+    String messageBody = msg;
+
+    int separator = msg.indexOf(":");
+
+    if (separator > 0) {
+      username = msg.substring(0, separator).trim();
+      messageBody = msg.substring(separator + 1).trim();
+    }
+
+    Color usernameColor =
+        playerChatColors.computeIfAbsent(
+            username,
+            key -> chatPalette[chatRandom.nextInt(chatPalette.length)]);
+
+    Label usernameLabel = new Label(username + ": ");
+    usernameLabel.setFont(chatFont);
+    usernameLabel.setTextFill(usernameColor);
+
+    Label messageLabel = new Label(messageBody);
+    messageLabel.setFont(chatFont);
+    messageLabel.setWrapText(true);
+    messageLabel.setMaxWidth(320);
+
+    HBox row = new HBox(4, usernameLabel, messageLabel);
+    row.setAlignment(Pos.TOP_LEFT);
+
+    chatMessagesContainer.getChildren().add(row);
+
     Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
   }
 
@@ -1255,15 +1324,26 @@ public final class LobbyScreen extends ContentScreen {
     String text = chatInputField.getText().trim();
     if (text.isEmpty()) return;
 
-    new Thread(() -> {
-      try {
-        java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(activeSocket.getOutputStream(), java.nio.charset.StandardCharsets.UTF_8));
-        writer.write("CHAT:" + text + "\n");
-        writer.flush();
-      } catch (Exception e) {
-        System.err.println("[LobbyScreen] Error sending chat: " + e.getMessage());
-      }
-    }).start();
+    new Thread(
+            () -> {
+              try {
+                java.io.BufferedWriter writer =
+                    new java.io.BufferedWriter(
+                        new java.io.OutputStreamWriter(
+                            activeSocket.getOutputStream(),
+                            java.nio.charset.StandardCharsets.UTF_8));
+                String username =
+                  (server != null)
+                      ? "Host"
+                      : "Player";
+
+              writer.write("CHAT:" + username + ": " + text + "\n");
+                writer.flush();
+              } catch (Exception e) {
+                System.err.println("[LobbyScreen] Error sending chat: " + e.getMessage());
+              }
+            })
+        .start();
 
     chatInputField.clear();
   }
