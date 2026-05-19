@@ -44,9 +44,9 @@ public final class GameRenderer {
     gc.setImageSmoothing(false);
 
     renderMap(gc, state.map());
-    renderHouseLabels(gc, state);
     renderParcels(gc, state);
     renderVehicles(gc, state, dt);
+    renderHouseLabels(gc, state);
   }
 
   /// Renders the static world map onto the provided GraphicsContext.
@@ -313,25 +313,15 @@ public final class GameRenderer {
 
   /** Renders house labels (numbers) at the bottom of each TARGET_ZONE tile. */
   private void renderHouseLabels(GraphicsContext gc, GameState state) {
+
     if (state.map() == null) return;
 
-    var targets = state.map().getTilesOfType(TileType.TARGET_ZONE);
-    gc.save();
-    gc.setFont(assets.getFont(FontKey.LABEL, FontKey.LABEL.getDefaultSize()));
-    gc.setFill(Color.WHITE);
-    gc.setTextAlign(TextAlignment.CENTER);
-    gc.setTextBaseline(VPos.CENTER);
+    Image targetCallImg = assets.getImage(ImageKey.MAP_LAYER_TARGET);
 
-    for (int i = 0; i < targets.size(); i++) {
-      Point2D tile = targets.get(i);
-      double x = tile.getX() * TILE_SIZE + TILE_SIZE / 2.0;
-      double y = tile.getY() * TILE_SIZE + TILE_SIZE - 8; // Bottom of tile
-
-      String label = String.valueOf(i);
-      gc.strokeText(label, x, y);
-      gc.fillText(label, x, y);
+    if (targetCallImg != null) {
+      gc.save();
+      gc.drawImage(targetCallImg, 0, 0);
+      gc.restore();
     }
-
-    gc.restore();
   }
 }
