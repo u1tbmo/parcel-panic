@@ -128,7 +128,8 @@ public class VehicleLogic {
   }
 
   public VehicleState state() {
-    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
+    return new VehicleState(
+        id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
   }
 
   public int getColorIndex() {

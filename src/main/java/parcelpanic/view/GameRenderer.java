@@ -325,11 +325,11 @@ public final class GameRenderer {
     }
   }
 
-  private ImageKey getImageKeyForVehicle(int id, int colorIndex) {
+  public static ImageKey getImageKeyForVehicle(int id, int colorIndex) {
     int color = colorIndex / 10;
     long time = System.currentTimeMillis() + id * 120L;
     int style = ((time / 500) % 2 == 0) ? 1 : 2;
-    return switch(color) {
+    return switch (color) {
       case 0 -> (style == 1) ? ImageKey.VEHICLE_CAR_RED_1 : ImageKey.VEHICLE_CAR_RED_2;
       case 1 -> (style == 1) ? ImageKey.VEHICLE_CAR_BLUE_1 : ImageKey.VEHICLE_CAR_BLUE_2;
       case 2 -> (style == 1) ? ImageKey.VEHICLE_CAR_GREEN_1 : ImageKey.VEHICLE_CAR_GREEN_2;

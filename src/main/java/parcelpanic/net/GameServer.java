@@ -154,16 +154,17 @@ public class GameServer implements Runnable {
         int colorIndex = conn.getCarColorIndex();
         int color = colorIndex / 10;
         int style = colorIndex % 10;
-        String colorName = switch(color) {
-          case 0 -> "Red";
-          case 1 -> "Blue";
-          case 2 -> "Green";
-          case 3 -> "Yellow";
-          case 4 -> "Orange";
-          case 5 -> "Pink";
-          case 6 -> "Magenta";
-          default -> "Red";
-        };
+        String colorName =
+            switch (color) {
+              case 0 -> "Red";
+              case 1 -> "Blue";
+              case 2 -> "Green";
+              case 3 -> "Yellow";
+              case 4 -> "Orange";
+              case 5 -> "Pink";
+              case 6 -> "Magenta";
+              default -> "Red";
+            };
         playerNames.add(name + "|" + colorName);
       }
     }
@@ -297,7 +298,8 @@ public class GameServer implements Runnable {
       try {
         client.disconnect();
       } catch (Exception e) {
-        System.err.println("[Server] Error disconnecting client during shutdown: " + e.getMessage());
+        System.err.println(
+            "[Server] Error disconnecting client during shutdown: " + e.getMessage());
       }
     }
 

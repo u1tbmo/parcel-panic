@@ -1,5 +1,6 @@
 package parcelpanic.screens;
 
+import java.util.ArrayList;
 import java.util.List;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -8,24 +9,29 @@ import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
 import parcelpanic.input.InputHintProvider;
 import parcelpanic.input.LocalPlayerController;
 import parcelpanic.logic.GameSimulation;
+import parcelpanic.logic.MatchRules;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
+import parcelpanic.media.AssetKeys.ImageKey;
 import parcelpanic.media.UiFactory;
 import parcelpanic.net.GameClient;
 import parcelpanic.screen.ContentScreen;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.PlayerIntent;
+import parcelpanic.util.SmoothedValue;
 import parcelpanic.video.VideoManager;
 import parcelpanic.view.GameRenderer;
 import parcelpanic.world.MapLoader;
@@ -34,8 +40,26 @@ import parcelpanic.world.TileMap;
 public final class MatchScreen extends ContentScreen {
   private Label timerLabel;
   private Label moneyLabel;
-  private Label parcelListLabel;
+  private HBox orderCardsBox;
   private BorderPane rootPane;
+
+  private final List<OrderCardUI> activeCards = new ArrayList<>();
+
+  private static class OrderCardUI {
+    final int parcelId;
+    final VBox card;
+    final SmoothedValue yOffset;
+    final SmoothedValue carrierAnim;
+    boolean isExiting = false;
+    boolean hasCarrier = false;
+
+    OrderCardUI(int parcelId, VBox card) {
+      this.parcelId = parcelId;
+      this.card = card;
+      this.yOffset = new SmoothedValue(100.0, 0.2); // Start off-screen
+      this.carrierAnim = new SmoothedValue(0.0, 0.3); // Animation for expanding carrier info
+    }
+  }
 
   private Color textColor;
   private Color surfaceDark;
@@ -109,8 +133,6 @@ public final class MatchScreen extends ContentScreen {
     rootPane.setMouseTransparent(true);
 
     rootPane.setTop(createTopHud());
-    rootPane.setLeft(createSidePane("ACTIVE PACKAGES"));
-    rootPane.setRight(createSidePane("FAILED / MISSED"));
     rootPane.setBottom(createBottomContainer());
   }
 
@@ -127,27 +149,6 @@ public final class MatchScreen extends ContentScreen {
     return topHud;
   }
 
-  private VBox createSidePane(String title) {
-    Font titleFont = ctx.assets().getFont(FontKey.LABEL);
-    Font bodyFont = ctx.assets().getFont(FontKey.LABEL);
-
-    Label titleLabel = UiFactory.createLabel(title, titleFont, textColor);
-
-    parcelListLabel = UiFactory.createLabel("No packages yet", bodyFont, textColor);
-    parcelListLabel.setWrapText(true);
-
-    VBox pane = new VBox(12, titleLabel, parcelListLabel);
-    pane.setAlignment(Pos.TOP_CENTER);
-    pane.setPadding(new Insets(20));
-    pane.setPrefWidth(150);
-    pane.setStyle(
-        "-fx-background-color: rgba(0, 0, 0, 0.55);"
-            + "-fx-border-color: white;"
-            + "-fx-border-width: 2;");
-
-    return pane;
-  }
-
   private VBox createBottomContainer() {
     Font hintFont = ctx.assets().getFont(FontKey.LABEL);
     Font iconFont = ctx.assets().getFont(FontKey.HINT);
@@ -161,9 +162,14 @@ public final class MatchScreen extends ContentScreen {
             hintFont,
             hintColor);
 
-    VBox container = new VBox(pauseHint);
+    orderCardsBox = new HBox(12);
+    orderCardsBox.setAlignment(Pos.BOTTOM_CENTER);
+    orderCardsBox.setFillHeight(false);
+    orderCardsBox.setPadding(new Insets(0, 0, -10, 0));
+
+    VBox container = new VBox(15, orderCardsBox);
     container.setAlignment(Pos.BOTTOM_CENTER);
-    container.setPadding(new Insets(0, 0, 20, 0));
+    container.setPadding(new Insets(0, 0, 0, 0));
     return container;
   }
 
@@ -175,13 +181,14 @@ public final class MatchScreen extends ContentScreen {
       if (!gameClient.isRunning() && !kicked) {
         // If the client stops running, check if it was due to a normal game end
         GameState latest = gameClient.getLatestState();
-        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 1.0)) {
+        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 100)) {
           ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
         } else {
           kicked = true;
-          Platform.runLater(() -> {
-            ctx.navigator().push(new KickOverlay("Host Exited"));
-          });
+          Platform.runLater(
+              () -> {
+                ctx.navigator().push(new KickOverlay("Host Exited"));
+              });
         }
         return;
       }
@@ -193,10 +200,10 @@ public final class MatchScreen extends ContentScreen {
     if (gameClient != null) {
       if (gameClient.isRunning()) {
         gameClient.sendIntent(intent);
-        
+
         // Also check if state dictates game end while running
         GameState latest = gameClient.getLatestState();
-        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 1.0)) {
+        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 100.0)) {
           ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
         }
       }
@@ -205,7 +212,7 @@ public final class MatchScreen extends ContentScreen {
 
     localState = simulation.update(dt, List.of(intent));
 
-    if (localState.matchTimer() <= 0 || localState.unhappiness() >= 1.0) {
+    if (localState.matchTimer() <= 0 || localState.unhappiness() >= 100.0) {
       ctx.navigator().requestSwitch(new ResultsScreen((int) localState.score()));
     }
   }
@@ -214,7 +221,7 @@ public final class MatchScreen extends ContentScreen {
   public void render(double alpha) {
     GameState state = getRenderableState();
 
-    updateHud(state);
+    updateHud(state, alpha);
 
     if (gameCanvas != null && gameRenderer != null) {
       GraphicsContext gc = gameCanvas.getGraphicsContext2D();
@@ -247,7 +254,7 @@ public final class MatchScreen extends ContentScreen {
     return localState;
   }
 
-  private void updateHud(GameState state) {
+  private void updateHud(GameState state, double alpha) {
     if (state == null) {
       return;
     }
@@ -264,30 +271,212 @@ public final class MatchScreen extends ContentScreen {
       moneyLabel.setText("$" + (int) state.score());
     }
 
-    if (parcelListLabel != null) {
-      parcelListLabel.setText(buildParcelListText(state));
+    if (orderCardsBox != null) {
+      updateOrderCards(state, alpha);
     }
   }
 
-  private String buildParcelListText(GameState state) {
-    if (state.parcels() == null || state.parcels().isEmpty()) {
-      return "No packages yet";
+  private void updateOrderCards(GameState state, double alpha) {
+    if (state.parcels() == null) return;
+
+    List<ParcelState> parcels = state.parcels();
+
+    for (OrderCardUI ui : activeCards) {
+      ui.isExiting = true;
     }
 
-    StringBuilder builder = new StringBuilder();
+    for (ParcelState parcel : parcels) {
+      OrderCardUI existingUi = null;
+      for (OrderCardUI ui : activeCards) {
+        if (ui.parcelId == parcel.id()) {
+          existingUi = ui;
+          break;
+        }
+      }
 
-    for (ParcelState parcel : state.parcels()) {
-      builder
-          .append("Package ")
-          .append(parcel.id())
-          .append("\nTarget: ")
-          .append(parcel.targetHouseId())
-          .append("\nTime: ")
-          .append((int) parcel.remainingTime())
-          .append("s\n\n");
+      if (existingUi != null) {
+        existingUi.isExiting = false;
+        updateOrderCard(existingUi, parcel, state);
+      } else {
+        VBox newCard = createEmptyOrderCard();
+        OrderCardUI newUi = new OrderCardUI(parcel.id(), newCard);
+        updateOrderCard(newUi, parcel, state);
+        activeCards.add(newUi);
+        orderCardsBox.getChildren().add(newCard);
+      }
     }
 
-    return builder.toString();
+    for (int i = activeCards.size() - 1; i >= 0; i--) {
+      OrderCardUI ui = activeCards.get(i);
+
+      // Update target based on state
+      ui.yOffset.update(ui.isExiting ? 100.0 : 0.0);
+      ui.carrierAnim.update(ui.hasCarrier ? 1.0 : 0.0);
+
+      double currentY = ui.yOffset.get(alpha);
+      ui.card.setTranslateY(currentY);
+
+      double cAnim = ui.carrierAnim.get(alpha);
+      HBox carrierBox = (HBox) ui.card.lookup("#carrierBox");
+      if (carrierBox != null) {
+        if (cAnim > 0.01) {
+          carrierBox.setVisible(true);
+          carrierBox.setManaged(true);
+          carrierBox.setOpacity(cAnim);
+          double h = 24.0 * cAnim;
+          carrierBox.setPrefHeight(h);
+          carrierBox.setMinHeight(h);
+          carrierBox.setMaxHeight(h);
+        } else {
+          carrierBox.setVisible(false);
+          carrierBox.setManaged(false);
+          carrierBox.setPrefHeight(0);
+          carrierBox.setMinHeight(0);
+          carrierBox.setMaxHeight(0);
+        }
+      }
+
+      if (ui.isExiting && ui.yOffset.getCurrent() >= 99.0) {
+        orderCardsBox.getChildren().remove(ui.card);
+        activeCards.remove(i);
+      }
+    }
+  }
+
+  private VBox createEmptyOrderCard() {
+    VBox card = new VBox(8);
+    card.setAlignment(Pos.TOP_CENTER);
+    card.setPadding(new Insets(12, 10, 16, 10));
+    card.setPrefWidth(200);
+    card.setMinHeight(40);
+
+    // Progress bar container
+    StackPane progressContainer = new StackPane();
+    progressContainer.setAlignment(Pos.CENTER_LEFT);
+    progressContainer.setPrefSize(180, 20);
+    progressContainer.setStyle("-fx-background-color: #ddd;");
+
+    Rectangle progressBar = new Rectangle(180, 20);
+    progressBar.setFill(Color.web(ColorKey.SUCCESS.getHex()));
+    progressBar.setId("progressBar");
+
+    progressContainer.getChildren().add(progressBar);
+
+    ImageView parcelIcon = new ImageView();
+    parcelIcon.setFitWidth(32);
+    parcelIcon.setFitHeight(32);
+    parcelIcon.setPreserveRatio(true);
+    parcelIcon.setId("parcelIcon");
+
+    Font titleFont = ctx.assets().getFont(FontKey.LABEL);
+    Label targetLabel =
+        UiFactory.createLabel("House 0", titleFont, Color.web(ColorKey.TEXT.getHex()));
+    targetLabel.setId("targetLabel");
+
+    HBox contentBox = new HBox(8, parcelIcon, targetLabel);
+    contentBox.setAlignment(Pos.CENTER);
+    contentBox.setId("contentBox");
+
+    // Carrier info box (hidden by default)
+    ImageView carrierIcon = new ImageView();
+    carrierIcon.setFitWidth(22);
+    carrierIcon.setFitHeight(22);
+    carrierIcon.setPreserveRatio(true);
+    carrierIcon.setViewport(new javafx.geometry.Rectangle2D(0, 0, 22, 22));
+    carrierIcon.setId("carrierIcon");
+
+    Label carrierLabel = UiFactory.createLabel("", titleFont, Color.web(ColorKey.TEXT.getHex()));
+    carrierLabel.setId("carrierLabel");
+
+    HBox carrierBox = new HBox(6, carrierIcon, carrierLabel);
+    carrierBox.setAlignment(Pos.CENTER);
+    carrierBox.setId("carrierBox");
+    carrierBox.setManaged(false);
+    carrierBox.setVisible(false);
+    carrierBox.setOpacity(0.0);
+    carrierBox.setPrefHeight(0);
+    carrierBox.setMinHeight(0);
+    carrierBox.setMaxHeight(0);
+
+    card.getChildren().addAll(progressContainer, contentBox, carrierBox);
+    card.setTranslateY(100.0); // Start off-screen
+    return card;
+  }
+
+  private void updateOrderCard(OrderCardUI ui, ParcelState parcel, GameState state) {
+    VBox card = ui.card;
+    StackPane progressContainer = (StackPane) card.getChildren().get(0);
+    Rectangle progressBar = (Rectangle) progressContainer.lookup("#progressBar");
+    HBox contentBox = (HBox) card.lookup("#contentBox");
+    ImageView parcelIcon = (ImageView) contentBox.lookup("#parcelIcon");
+    Label targetLabel = (Label) contentBox.lookup("#targetLabel");
+
+    HBox carrierBox = (HBox) card.lookup("#carrierBox");
+    ImageView carrierIcon = (ImageView) carrierBox.lookup("#carrierIcon");
+    Label carrierLabel = (Label) carrierBox.lookup("#carrierLabel");
+
+    targetLabel.setText("House " + parcel.targetHouseId());
+
+    if (parcelIcon.getImage() == null) {
+      parcelIcon.setImage(ctx.assets().getImage(ImageKey.ENTITY_PARCEL));
+    }
+
+    if (parcel.carrierId() != null) {
+      parcelpanic.shared.VehicleState carrier = null;
+      if (state.vehicles() != null) {
+        for (parcelpanic.shared.VehicleState v : state.vehicles()) {
+          if (v.id() == parcel.carrierId()) {
+            carrier = v;
+            break;
+          }
+        }
+      }
+      
+      if (carrier != null) {
+        carrierLabel.setText("Player " + (carrier.id() + 1));
+        carrierIcon.setImage(ctx.assets().getImage(GameRenderer.getImageKeyForVehicle(carrier.id(), carrier.colorIndex())));
+        ui.hasCarrier = true;
+      } else {
+        ui.hasCarrier = false;
+      }
+    } else {
+      ui.hasCarrier = false;
+    }
+
+    double maxTime = MatchRules.MAX_PARCEL_TIME;
+    double remaining = Math.max(0, parcel.remainingTime());
+    double percentage = remaining / maxTime;
+
+    progressBar.setWidth(180 * percentage);
+
+    if (percentage > 0.5) {
+      progressBar.setFill(Color.web(ColorKey.SUCCESS.getHex()));
+    } else if (percentage > 0.25) {
+      progressBar.setFill(Color.web(ColorKey.WARNING.getHex()));
+    } else {
+      progressBar.setFill(Color.web(ColorKey.DANGER.getHex()));
+    }
+
+    if (percentage <= 0.25) {
+      double time = System.currentTimeMillis() / 1000.0;
+      double pulse = (Math.sin(time * 10) + 1) / 2.0;
+
+      // Interpolate background between off-white #FFF9E6 and light red #FFD0D0
+      int r = 255;
+      int g = (int) (249 - (249 - 208) * pulse);
+      int b = (int) (230 - (230 - 208) * pulse);
+      String bgColor = String.format("#%02X%02X%02X", r, g, b);
+
+      card.setStyle(
+          "-fx-background-color: "
+              + bgColor
+              + ";"
+              + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 10, 0, 0, -2);");
+    } else {
+      card.setStyle(
+          "-fx-background-color: #FFF9E6;"
+              + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 10, 0, 0, -2);");
+    }
   }
 
   @Override

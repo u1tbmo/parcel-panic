@@ -48,7 +48,11 @@ public class ClientConnection implements Runnable {
       writer.flush();
 
       // Broadcast join announcement
-      String joinMsg = ">>> Player " + (clientId + 1) + (clientId == 0 ? " (Host)" : "") + " has joined the lobby!";
+      String joinMsg =
+          ">>> Player "
+              + (clientId + 1)
+              + (clientId == 0 ? " (Host)" : "")
+              + " has joined the lobby!";
       server.broadcastChatMessage(joinMsg);
       server.broadcastPlayerList();
 
@@ -70,7 +74,8 @@ public class ClientConnection implements Runnable {
             this.customName = parts[1];
             try {
               this.carColorIndex = Integer.parseInt(parts[2]);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
             server.broadcastPlayerList();
           }
         } else if (line.startsWith("CHAT:")) {

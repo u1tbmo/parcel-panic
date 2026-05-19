@@ -12,35 +12,35 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-import javafx.scene.shape.Rectangle;
-import parcelpanic.media.AssetKeys.ImageKey;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
 import parcelpanic.input.InputHintProvider;
 import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
+import parcelpanic.media.AssetKeys.ImageKey;
 import parcelpanic.media.UiFactory;
 import parcelpanic.screen.ContentScreen;
 import parcelpanic.screens.MatchScreen;
 import parcelpanic.util.SmoothedValue;
 import parcelpanic.video.VideoManager;
-import java.util.Random;
 
 /// A premium, fully keyboard-navigable Lobby UI that matches the home screen selection style.
 public final class LobbyScreen extends ContentScreen {
@@ -156,18 +156,18 @@ public final class LobbyScreen extends ContentScreen {
   private final Map<String, Color> playerChatColors = new HashMap<>();
 
   private final Color[] chatPalette =
-    new Color[] {
-      Color.web("#ff7675"),
-      Color.web("#74b9ff"),
-      Color.web("#55efc4"),
-      Color.web("#ffeaa7"),
-      Color.web("#a29bfe"),
-      Color.web("#fd79a8"),
-      Color.web("#81ecec"),
-      Color.web("#fab1a0")
-    };
+      new Color[] {
+        Color.web("#ff7675"),
+        Color.web("#74b9ff"),
+        Color.web("#55efc4"),
+        Color.web("#ffeaa7"),
+        Color.web("#a29bfe"),
+        Color.web("#fd79a8"),
+        Color.web("#81ecec"),
+        Color.web("#fab1a0")
+      };
 
-private final Random chatRandom = new Random();
+  private final Random chatRandom = new Random();
 
   @Override
   protected VideoManager.ViewportMode viewportMode() {
@@ -329,10 +329,20 @@ private final Random chatRandom = new Random();
 
     String text =
         serverInfo.isFull()
-            ? "FULL  " + ip + "  (" + serverInfo.currentPlayers() + "/"
-                + serverInfo.maxPlayers() + ")"
-            : "JOIN  " + ip + "  (" + serverInfo.currentPlayers() + "/"
-                + serverInfo.maxPlayers() + ")";
+            ? "FULL  "
+                + ip
+                + "  ("
+                + serverInfo.currentPlayers()
+                + "/"
+                + serverInfo.maxPlayers()
+                + ")"
+            : "JOIN  "
+                + ip
+                + "  ("
+                + serverInfo.currentPlayers()
+                + "/"
+                + serverInfo.maxPlayers()
+                + ")";
 
     if (existing != null) {
       existing.setText(text);
@@ -436,17 +446,23 @@ private final Random chatRandom = new Random();
 
       TextField nameInput = new TextField(myPlayerName);
       nameInput.setMaxWidth(300);
-      nameInput.setStyle("-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: white; -fx-font-size: 16px; -fx-border-color: rgba(255, 255, 255, 0.2); -fx-border-width: 1px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 8px;");
-      nameInput.textProperty().addListener((obs, oldVal, newVal) -> {
-        myPlayerName = newVal.trim().isEmpty() ? "Player" : newVal.trim();
-        sendNameColorUpdate();
-      });
-      nameInput.setOnKeyPressed(event -> {
-        if (event.getCode() == javafx.scene.input.KeyCode.ENTER || event.getCode() == javafx.scene.input.KeyCode.DOWN) {
-          event.consume();
-          rootPane.requestFocus();
-        }
-      });
+      nameInput.setStyle(
+          "-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: white; -fx-font-size: 16px; -fx-border-color: rgba(255, 255, 255, 0.2); -fx-border-width: 1px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 8px;");
+      nameInput
+          .textProperty()
+          .addListener(
+              (obs, oldVal, newVal) -> {
+                myPlayerName = newVal.trim().isEmpty() ? "Player" : newVal.trim();
+                sendNameColorUpdate();
+              });
+      nameInput.setOnKeyPressed(
+          event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ENTER
+                || event.getCode() == javafx.scene.input.KeyCode.DOWN) {
+              event.consume();
+              rootPane.requestFocus();
+            }
+          });
 
       VBox nameBox = new VBox(8, nameTitle, nameInput);
       nameBox.setPadding(new Insets(0, 0, 20, 0));
@@ -509,9 +525,7 @@ private final Random chatRandom = new Random();
       statusLabel =
           UiFactory.createLabel(
               "Connected! Waiting for host to start the match...", labelFont, textColor);
-      ipInfoLabel =
-          UiFactory.createLabel(
-              "Host IP: " + manualHostIp, labelFont, selectedColor);
+      ipInfoLabel = UiFactory.createLabel("Host IP: " + manualHostIp, labelFont, selectedColor);
       VBox statusBox = new VBox(10, statusLabel, ipInfoLabel);
       statusBox.setAlignment(Pos.CENTER_LEFT);
       statusBox.setPadding(new Insets(0, 0, 10, 0));
@@ -596,11 +610,14 @@ private final Random chatRandom = new Random();
   }
 
   private VBox buildPlayersListSection(Font labelFont, Font menuFont) {
-    Label playersHeader = UiFactory.createLabel("PLAYERS IN LOBBY (" + activePlayers.size() + "/4)", labelFont, selectedColor);
+    Label playersHeader =
+        UiFactory.createLabel(
+            "PLAYERS IN LOBBY (" + activePlayers.size() + "/4)", labelFont, selectedColor);
     playersHeader.setStyle("-fx-font-weight: bold;");
     VBox playersListBox = new VBox(8);
     playersListBox.setPadding(new Insets(10, 15, 10, 15));
-    playersListBox.setStyle("-fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-width: 1px; -fx-border-radius: 8px; -fx-background-radius: 8px;");
+    playersListBox.setStyle(
+        "-fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-width: 1px; -fx-border-radius: 8px; -fx-background-radius: 8px;");
 
     for (int i = 0; i < 4; i++) {
       if (i < activePlayers.size()) {
@@ -613,16 +630,17 @@ private final Random chatRandom = new Random();
           colorName = parts[1];
         }
 
-        ImageKey key = switch (colorName.toLowerCase()) {
-          case "red" -> ImageKey.VEHICLE_CAR_RED_1;
-          case "blue" -> ImageKey.VEHICLE_CAR_BLUE_1;
-          case "green" -> ImageKey.VEHICLE_CAR_GREEN_1;
-          case "yellow" -> ImageKey.VEHICLE_CAR_YELLOW_1;
-          case "orange" -> ImageKey.VEHICLE_CAR_ORANGE_1;
-          case "pink" -> ImageKey.VEHICLE_CAR_PINK_1;
-          case "magenta" -> ImageKey.VEHICLE_CAR_MAGENTA_1;
-          default -> ImageKey.VEHICLE_CAR;
-        };
+        ImageKey key =
+            switch (colorName.toLowerCase()) {
+              case "red" -> ImageKey.VEHICLE_CAR_RED_1;
+              case "blue" -> ImageKey.VEHICLE_CAR_BLUE_1;
+              case "green" -> ImageKey.VEHICLE_CAR_GREEN_1;
+              case "yellow" -> ImageKey.VEHICLE_CAR_YELLOW_1;
+              case "orange" -> ImageKey.VEHICLE_CAR_ORANGE_1;
+              case "pink" -> ImageKey.VEHICLE_CAR_PINK_1;
+              case "magenta" -> ImageKey.VEHICLE_CAR_MAGENTA_1;
+              default -> ImageKey.VEHICLE_CAR;
+            };
 
         Image img = ctx.assets().getImage(key);
         ImageView view = new ImageView(img);
@@ -669,7 +687,7 @@ private final Random chatRandom = new Random();
 
   private String getColorName(int colorIndex) {
     int color = colorIndex / 10;
-    return switch(color) {
+    return switch (color) {
       case 0 -> "Red";
       case 1 -> "Blue";
       case 2 -> "Green";
@@ -704,7 +722,9 @@ private final Random chatRandom = new Random();
   private void sendNameColorUpdate() {
     if (activeSocket != null && !socketHandedOffToGame) {
       try {
-        java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(activeSocket.getOutputStream()));
+        java.io.BufferedWriter writer =
+            new java.io.BufferedWriter(
+                new java.io.OutputStreamWriter(activeSocket.getOutputStream()));
         writer.write("NAME_COLOR:" + myPlayerName + ":" + myColorIndex + "\n");
         writer.flush();
       } catch (java.io.IOException e) {
@@ -743,9 +763,7 @@ private final Random chatRandom = new Random();
                 server.start();
 
                 lanDiscovery.startBroadcasting(
-                    resolvedIp,
-                    () -> server != null ? server.getConnectedCount() : 0,
-                    4);
+                    resolvedIp, () -> server != null ? server.getConnectedCount() : 0, 4);
 
                 Platform.runLater(
                     () -> {
@@ -974,13 +992,14 @@ private final Random chatRandom = new Random();
   }
 
   private void openManualIpOverlay() {
-    ctx.navigator().push(
-        new HostIpOverlay(
-            manualHostIp,
-            ip -> {
-              manualHostIp = ip;
-              connectToHost(ip);
-            }));
+    ctx.navigator()
+        .push(
+            new HostIpOverlay(
+                manualHostIp,
+                ip -> {
+                  manualHostIp = ip;
+                  connectToHost(ip);
+                }));
   }
 
   private final class HostIpOverlay implements parcelpanic.screen.Screen {
@@ -1248,9 +1267,12 @@ private final Random chatRandom = new Random();
     chatScrollPane.setPrefHeight(180);
 
     // Auto-scroll on container height changes (perfect dynamic scroll alignment)
-    chatMessagesContainer.heightProperty().addListener((obs, oldVal, newVal) -> {
-      chatScrollPane.setVvalue(1.0);
-    });
+    chatMessagesContainer
+        .heightProperty()
+        .addListener(
+            (obs, oldVal, newVal) -> {
+              chatScrollPane.setVvalue(1.0);
+            });
     chatScrollPane.setStyle(
         "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
 
@@ -1299,8 +1321,7 @@ private final Random chatRandom = new Random();
 
     Color usernameColor =
         playerChatColors.computeIfAbsent(
-            username,
-            key -> chatPalette[chatRandom.nextInt(chatPalette.length)]);
+            username, key -> chatPalette[chatRandom.nextInt(chatPalette.length)]);
 
     Label usernameLabel = new Label(username + ": ");
     usernameLabel.setFont(chatFont);
@@ -1332,12 +1353,9 @@ private final Random chatRandom = new Random();
                         new java.io.OutputStreamWriter(
                             activeSocket.getOutputStream(),
                             java.nio.charset.StandardCharsets.UTF_8));
-                String username =
-                  (server != null)
-                      ? "Host"
-                      : "Player";
+                String username = (server != null) ? "Host" : "Player";
 
-              writer.write("CHAT:" + username + ": " + text + "\n");
+                writer.write("CHAT:" + username + ": " + text + "\n");
                 writer.flush();
               } catch (Exception e) {
                 System.err.println("[LobbyScreen] Error sending chat: " + e.getMessage());

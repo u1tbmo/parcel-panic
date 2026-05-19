@@ -17,7 +17,8 @@ public final class AssetKeys {
     SURFACE_DARK("#1a1a1a"),
     SURFACE_BLACK("#000000"),
     BACKGROUND("#FAFAFA"),
-    BORDER("#E0E0E0");
+    BORDER("#E0E0E0"),
+    CARD_BACKGROUND("#C1CEDF");
 
     private final String hex;
 
@@ -53,7 +54,6 @@ public final class AssetKeys {
     VEHICLE_CAR_PINK_2("entities/pink_2.png"),
     VEHICLE_CAR_MAGENTA_1("entities/magenta_1.png"),
     VEHICLE_CAR_MAGENTA_2("entities/magenta_2.png"),
-
 
     MAP_LAYER_GRASS("map_renders/1_outergrass.png"),
     MAP_LAYER_BUILDINGS("map_renders/2_buildings.png"),
