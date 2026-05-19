@@ -6,9 +6,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -17,6 +20,7 @@ import parcelpanic.input.InputHintProvider;
 import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
+import parcelpanic.media.AssetKeys.ImageKey;
 import parcelpanic.media.UiFactory;
 import parcelpanic.net.LobbyScreen;
 import parcelpanic.screen.ContentScreen;
@@ -47,11 +51,11 @@ public final class MenuScreen extends ContentScreen {
   private final Map<Item, Label> menuLabels = new EnumMap<>(Item.class);
   private final Map<Item, SmoothedValue> offsets = new EnumMap<>(Item.class);
 
-  private BorderPane rootPane;
+  private StackPane rootContainer; 
+  private BorderPane uiOverlayPane; 
   private Color textColor;
   private Color mutedColor;
   private Color selectedColor;
-  private Color surfaceBlack;
 
   @Override
   protected VideoManager.ViewportMode viewportMode() {
@@ -64,7 +68,6 @@ public final class MenuScreen extends ContentScreen {
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
     this.mutedColor = ctx.assets().getColor(ColorKey.TEXT_MUTED);
     this.selectedColor = ctx.assets().getColor(ColorKey.SUCCESS);
-    this.surfaceBlack = ctx.assets().getColor(ColorKey.SURFACE_BLACK);
 
     // Initialize animation offsets
     for (Item item : Item.values()) {
@@ -75,7 +78,7 @@ public final class MenuScreen extends ContentScreen {
   @Override
   protected Node createContent() {
     buildUI();
-    return rootPane;
+    return rootContainer; 
   }
 
   @Override
@@ -100,19 +103,31 @@ public final class MenuScreen extends ContentScreen {
   }
 
   private void buildUI() {
-    // Create background
-    rootPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    rootPane.setBackground(
-        UiFactory.createBackground(
-                surfaceBlack, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
-            .getBackground());
+
+    rootContainer = new StackPane();
+    rootContainer.setPrefSize(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+
+    Image gifBackground = ctx.assets().getImage(ImageKey.MENU_MAIN);
+    if (gifBackground != null) {
+      ImageView bgImageView = new ImageView(gifBackground);
+      bgImageView.setFitWidth(VideoManager.LOGICAL_WIDTH);
+      bgImageView.setFitHeight(VideoManager.LOGICAL_HEIGHT);
+      bgImageView.setPreserveRatio(false);
+      bgImageView.setSmooth(false); // Keeps pixel-art game assets crisp when scaled
+      
+      rootContainer.getChildren().add(bgImageView);
+    }
+
+
+    uiOverlayPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+    uiOverlayPane.setBackground(null); 
 
     // Title
-    Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
-    Label title = UiFactory.createTitle("Parcel Panic", titleFont, textColor);
-    VBox topContainer = new VBox(title);
-    topContainer.setAlignment(Pos.TOP_CENTER);
-    topContainer.setPadding(new Insets(80, 0, 0, 0));
+    // Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
+    // Label title = UiFactory.createTitle("Parcel Panic", titleFont, textColor);
+    // VBox topContainer = new VBox(title);
+    // topContainer.setAlignment(Pos.TOP_CENTER);
+    // topContainer.setPadding(new Insets(80, 0, 0, 0));
 
     // Menu items
     Font menuFont = ctx.assets().getFont(FontKey.TITLE);
@@ -156,9 +171,13 @@ public final class MenuScreen extends ContentScreen {
     bottomContainer.setAlignment(Pos.BOTTOM_CENTER);
     bottomContainer.setPadding(new Insets(0, 0, 60, 0));
 
-    rootPane.setTop(topContainer);
-    rootPane.setCenter(menuContainer);
-    rootPane.setBottom(bottomContainer);
+
+    // uiOverlayPane.setTop(topContainer);
+    uiOverlayPane.setCenter(menuContainer);
+    uiOverlayPane.setBottom(bottomContainer);
+
+
+    rootContainer.getChildren().add(uiOverlayPane);
 
     updateMenuSelection();
   }

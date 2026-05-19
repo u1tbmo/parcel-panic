@@ -60,6 +60,8 @@ public final class AssetKeys {
     MAP_LAYER_OBSTACLES("map_renders/3_obstacles.png"),
     MAP_LAYER_TARGET("map_renders/target_call.png"),
 
+    MENU_MAIN("menu/title.gif"),
+
     ENTITY_PARCEL("entities/parcel.png"),
     EMOTE_CROSS("emotes/emote_cross.png");
     private final String path;
