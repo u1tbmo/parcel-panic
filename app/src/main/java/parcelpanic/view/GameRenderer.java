@@ -18,12 +18,16 @@ import parcelpanic.shared.VehicleState;
 import parcelpanic.shared.VehicleState.PromptType;
 import parcelpanic.world.TileMap;
 import parcelpanic.world.TileMap.TileType;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class GameRenderer {
   private static final int TILE_SIZE = 40;
   private static final double PROMPT_ICON_SIZE = 38.0;
   private final AssetRegistry assets;
   private final ControlsSettings controls;
+  private final Map<Integer, EntityInterpolator> vehicleInterpolators = new HashMap<>();
+  private long lastRenderTimeNanos = System.nanoTime();
 
   public GameRenderer(AssetRegistry assets, ControlsSettings controls) {
     this.assets = assets;
@@ -33,12 +37,15 @@ public final class GameRenderer {
   public void render(GraphicsContext gc, GameState state, double alpha) {
     if (state == null) return;
 
+    long now = System.nanoTime();
+    double dt = Math.min((now - lastRenderTimeNanos) / 1_000_000_000.0, 0.05);    lastRenderTimeNanos = now;
+
     gc.setImageSmoothing(false);
 
     renderMap(gc, state.map());
     renderHouseLabels(gc, state);
     renderParcels(gc, state);
-    renderVehicles(gc, state);
+    renderVehicles(gc, state, dt);
   }
 
   /// Renders the static world map onto the provided GraphicsContext.
@@ -78,7 +85,7 @@ public final class GameRenderer {
     }
   }
 
-  private void renderVehicles(GraphicsContext gc, GameState state) {
+  private void renderVehicles(GraphicsContext gc, GameState state, double dt) {
     if (state.vehicles() == null || state.vehicles().isEmpty()) {
       return;
     }
@@ -86,6 +93,16 @@ public final class GameRenderer {
     Image carSprite = assets.getImage(ImageKey.VEHICLE_CAR);
 
     for (VehicleState vehicle : state.vehicles()) {
+      EntityInterpolator interpolator =
+          vehicleInterpolators.computeIfAbsent(
+              vehicle.id(), id -> new EntityInterpolator(vehicle.x(), vehicle.y(), 50.0));
+
+      interpolator.setTarget(vehicle.x(), vehicle.y());
+      interpolator.update(dt);
+
+      double renderX = interpolator.getRenderX();
+      double renderY = interpolator.getRenderY();
+
       gc.save();
 
       // North=0, East=90, West=270, South=180
@@ -99,7 +116,7 @@ public final class GameRenderer {
       if (carSprite != null) {
         // srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH
         gc.drawImage(
-            carSprite, frameIndex * 22, 0, 22, 22, vehicle.x() - 20, vehicle.y() - 20, 40, 40);
+            carSprite, frameIndex * 22, 0, 22, 22, renderX - 20, renderY - 20, 40, 40);
       }
 
       gc.restore();
@@ -110,8 +127,8 @@ public final class GameRenderer {
         gc.setFill(Color.WHITE);
         gc.setStroke(Color.BLACK);
         gc.setLineWidth(1.5);
-        double dotX = vehicle.x() + vehicle.vx() * 0.08;
-        double dotY = vehicle.y() + vehicle.vy() * 0.08;
+        double dotX = renderX + vehicle.vx() * 0.08;
+        double dotY = renderY + vehicle.vy() * 0.08;
         double dotSize = 6;
         gc.fillOval(dotX - dotSize / 2, dotY - dotSize / 2, dotSize, dotSize);
         gc.strokeOval(dotX - dotSize / 2, dotY - dotSize / 2, dotSize, dotSize);
@@ -127,15 +144,16 @@ public final class GameRenderer {
         gc.setTextAlign(TextAlignment.CENTER);
         gc.setTextBaseline(VPos.CENTER);
         String targetNum = String.valueOf(carriedParcel.targetHouseId());
-        gc.fillText(targetNum, vehicle.x(), vehicle.y() - 28);
+        gc.fillText(targetNum, renderX, renderY - 28);
         gc.restore();
       }
 
-      renderPrompt(gc, state, vehicle);
+      renderPrompt(gc, state, vehicle, renderX, renderY);
     }
   }
 
-  private void renderPrompt(GraphicsContext gc, GameState state, VehicleState vehicle) {
+  private void renderPrompt(
+      GraphicsContext gc, GameState state, VehicleState vehicle, double renderX, double renderY) {
     PromptType prompt = vehicle.prompt();
     if (prompt == null || prompt == PromptType.NONE) {
       return;
@@ -156,8 +174,8 @@ public final class GameRenderer {
     } else {
       if (prompt == PromptType.DELIVER_WRONG) {
         // Wrong house: show at vehicle's current location
-        centerX = vehicle.x();
-        centerY = vehicle.y() - 40;
+        centerX = renderX;
+        centerY = renderY - 40;
       } else {
         // Correct house: show at target zone
         ParcelState carriedParcel = findCarriedParcel(state, vehicle.id());

@@ -13,9 +13,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
+import parcelpanic.input.InputHintProvider;
 import parcelpanic.input.LocalPlayerController;
 import parcelpanic.logic.GameSimulation;
-import parcelpanic.logic.entities.ParcelLogic;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.UiFactory;
@@ -29,10 +29,11 @@ import parcelpanic.world.MapLoader;
 import parcelpanic.world.TileMap;
 
 public final class MatchScreen extends ContentScreen {
-  private final GameClient gameClient;
-
   private Label timerLabel;
-  private Label scoreLabel;
+  private BorderPane rootPane;
+
+  private Color textColor;
+  private Color surfaceDark;
 
   private TileMap tileMap;
   private GameRenderer gameRenderer;
@@ -40,6 +41,8 @@ public final class MatchScreen extends ContentScreen {
 
   private GameSimulation simulation;
   private LocalPlayerController inputController;
+  private GameState localState;
+  private final GameClient gameClient;
 
   public MatchScreen() {
     this.gameClient = null;
@@ -56,120 +59,146 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   protected void onBeforeBuild() {
+    this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
+    this.surfaceDark = ctx.assets().getColor(ColorKey.SURFACE_DARK);
+
     try {
       this.tileMap = MapLoader.loadFromText("/maps/map.txt");
     } catch (Exception e) {
       System.err.println("Map failed to load, using default.");
       this.tileMap = new TileMap(20, 15);
     }
+
     this.gameRenderer = new GameRenderer(ctx.assets(), ctx.settings().controls());
+    this.simulation = new GameSimulation(tileMap);
     this.inputController = new LocalPlayerController();
 
-    if (gameClient == null) {
-      this.simulation = new GameSimulation(tileMap);
-      // Initial game state setup
-      simulation.addPlayer(1, 300, 300);
-      simulation.addParcel(new ParcelLogic(1, 1, 620, 260));
+    // Add players so vehicles exist and can render
+    simulation.addPlayer(0, 0, 0);
+
+    if (gameClient != null) {
+      simulation.addPlayer(1, 0, 0);
     }
+
+    this.localState = simulation.generateSnapshot();
   }
 
   @Override
   protected Node createContent() {
+    buildUI();
+
     int tileSize = 40;
     this.gameCanvas = new Canvas(tileMap.getWidth() * tileSize, tileMap.getHeight() * tileSize);
 
-    StackPane gameLayer = new StackPane();
-    gameLayer.getChildren().add(gameCanvas);
-    gameLayer.setAlignment(Pos.CENTER);
-
-    BorderPane rootPane =
-        UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    rootPane.setMouseTransparent(true);
+    rootPane.setMouseTransparent(false);
     rootPane.setPickOnBounds(false);
 
-    Font font = ctx.assets().getFont(FontKey.LABEL, 20);
-    Color textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
+    StackPane gameLayer = new StackPane();
+    gameLayer.getChildren().addAll(gameCanvas, rootPane);
+    gameLayer.setAlignment(Pos.CENTER);
 
-    timerLabel = UiFactory.createLabel("03:00", font, textColor);
-    scoreLabel = UiFactory.createLabel("$0", font, textColor);
+    return gameLayer;
+  }
 
-    VBox hudBox = new VBox(5);
-    hudBox.setAlignment(Pos.TOP_CENTER);
-    hudBox.setPadding(new Insets(10, 0, 0, 0));
-    hudBox.getChildren().addAll(timerLabel, scoreLabel);
+  private void buildUI() {
+    rootPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+    // rootPane.setBackground(
+    //     UiFactory.createBackground(
+    //             surfaceDark, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
+    //         .getBackground());
 
-    rootPane.setTop(hudBox);
+    VBox centerContainer = createCenterContainer();
+    VBox bottomContainer = createBottomContainer();
 
-    StackPane finalLayer = new StackPane();
-    finalLayer.getChildren().addAll(gameLayer, rootPane);
+    rootPane.setCenter(centerContainer);
+    rootPane.setBottom(bottomContainer);
+  }
 
-    return finalLayer;
+  private VBox createCenterContainer() {
+    Font font = ctx.assets().getFont(FontKey.HEADLINE);
+    Label status = UiFactory.createLabel("MATCH RUNNING", font, textColor);
+
+    Font timerFont = ctx.assets().getFont(FontKey.TITLE);
+    timerLabel = UiFactory.createLabel("Time: 180", timerFont, textColor);
+
+    VBox container = new VBox(20);
+    container.setAlignment(Pos.CENTER);
+    container.getChildren().addAll(status, timerLabel);
+    return container;
+  }
+
+  private VBox createBottomContainer() {
+    Font hintFont = ctx.assets().getFont(FontKey.LABEL);
+    Font iconFont = ctx.assets().getFont(FontKey.HINT);
+    Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
+
+    Node pauseHint =
+        UiFactory.createHint(
+            InputHintProvider.getIconForAction(InputAction.PAUSE, ctx.settings().controls()),
+            "Pause",
+            iconFont,
+            hintFont,
+            hintColor);
+
+    VBox container = new VBox(pauseHint);
+    container.setAlignment(Pos.BOTTOM_CENTER);
+    container.setPadding(new Insets(0, 0, 60, 0));
+    return container;
   }
 
   @Override
   public void fixedUpdate(double dt) {
-    if (gameClient != null) {
-      int activePlayerId = gameClient.getPlayerId();
-      if (activePlayerId != -1) {
-        PlayerIntent intent = inputController.createIntent(activePlayerId, ctx.input());
-        gameClient.sendIntent(intent);
-      }
-      GameState state = gameClient.getLatestState();
-      if (state != null && state.matchTimer() <= 0) {
-        ctx.navigator().requestSwitch(new ResultsScreen((int) state.score()));
-      }
-    } else {
-      PlayerIntent intent = inputController.createIntent(1, ctx.input());
-      simulation.update(dt, List.of(intent));
+    int playerId = 0;
 
-      if (simulation.getMatchTimer() <= 0) {
-        ctx.navigator().requestSwitch(new ResultsScreen(1234));
-      }
+    if (gameClient != null) {
+      playerId = Math.max(0, gameClient.getPlayerId() - 1);
+    }
+
+    PlayerIntent intent = inputController.createIntent(playerId, ctx.input());
+
+    if (gameClient != null) {
+      gameClient.sendIntent(intent);
+      return;
+    }
+
+    localState = simulation.update(dt, List.of(intent));
+
+    if (localState.matchTimer() <= 0) {
+      ctx.navigator().requestSwitch(new ResultsScreen(1234));
     }
   }
 
   @Override
   public void render(double alpha) {
-    GameState state = null;
+    GameState state;
+
     if (gameClient != null) {
       state = gameClient.getLatestState();
-    } else {
-      state = simulation.generateSnapshot();
-    }
 
-    if (state == null) {
-      if (gameCanvas != null) {
-        GraphicsContext gc = gameCanvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
-        gc.setFill(Color.WHITE);
-        gc.fillText(
-            "Waiting for server state...",
-            gameCanvas.getWidth() / 2 - 80,
-            gameCanvas.getHeight() / 2);
+      if (state == null) {
+        state = localState;
+      } else if (state.map() == null) {
+        state =
+            new GameState(
+                state.matchTimer(),
+                state.unhappiness(),
+                state.score(),
+                state.vehicles(),
+                state.parcels(),
+                tileMap);
       }
-      return;
+    } else {
+      state = localState;
     }
 
-    if (timerLabel != null && scoreLabel != null) {
-      int totalSeconds = Math.max(0, (int) state.matchTimer());
-      int minutes = totalSeconds / 60;
-      int seconds = totalSeconds % 60;
-
-      timerLabel.setText(String.format("%02d:%02d", minutes, seconds));
-      scoreLabel.setText(String.format("$%d", (int) state.score()));
+    if (timerLabel != null) {
+      timerLabel.setText("Time: " + Math.max(0, (int) state.matchTimer()));
     }
 
     if (gameCanvas != null && gameRenderer != null) {
       GraphicsContext gc = gameCanvas.getGraphicsContext2D();
       gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
       gameRenderer.render(gc, state, alpha);
-    }
-  }
-
-  @Override
-  protected void onBeforeExit() {
-    if (gameClient != null) {
-      gameClient.disconnect();
     }
   }
 

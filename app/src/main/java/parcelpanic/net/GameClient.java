@@ -5,7 +5,9 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.net.Socket;
+import java.util.Base64;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.PlayerIntent;
 
@@ -54,7 +56,10 @@ public class GameClient {
 
         } else if (line.startsWith("STATE:")) {
           // Deserialize authoritative game state
-          String stateJson = line.substring(6);
+          String encodedJson = line.substring(6);
+          String stateJson =
+              new String(Base64.getDecoder().decode(encodedJson), StandardCharsets.UTF_8);
+
           this.latestState = Serializer.deserializeGameState(stateJson);
         }
       }
@@ -74,7 +79,10 @@ public class GameClient {
 
     try {
       String json = Serializer.serializePlayerIntent(intent);
-      writer.write("INTENT:" + json + "\n");
+      String encodedJson =
+          Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+
+      writer.write("INTENT:" + encodedJson + "\n");
       writer.flush();
     } catch (IOException e) {
       System.err.println("[Client] Error writing player input: " + e.getMessage());

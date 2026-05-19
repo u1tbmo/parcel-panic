@@ -15,6 +15,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
@@ -108,6 +109,11 @@ public final class LobbyScreen extends ContentScreen {
   private Color selectedColor;
   private Color surfaceBlack;
 
+  private boolean socketHandedOffToGame = false;
+
+  private final LanDiscoveryService lanDiscovery = new LanDiscoveryService();
+  private VBox discoveredServersBox;
+
   @Override
   protected VideoManager.ViewportMode viewportMode() {
     return VideoManager.ViewportMode.FULL_WINDOW;
@@ -115,7 +121,6 @@ public final class LobbyScreen extends ContentScreen {
 
   @Override
   public void fixedUpdate(double dtSeconds) {
-    // Update live players count when hosting
     if (currentMode == Mode.HOSTING && server != null && statusLabel != null) {
       int count = server.getConnectedCount();
       if (count != lastPlayerCount) {
@@ -129,7 +134,6 @@ public final class LobbyScreen extends ContentScreen {
       }
     }
 
-    // Update smooth translate target offsets
     int itemCount = getItemCount();
     for (int i = 0; i < itemCount; i++) {
       double target = (i == selectedIndex) ? 12.0 : 0.0;
@@ -144,7 +148,6 @@ public final class LobbyScreen extends ContentScreen {
   public void render(double alpha) {
     updateSelectionColors();
 
-    // Animate label translation offsets
     int itemCount = getItemCount();
     for (int i = 0; i < itemCount; i++) {
       if (i < itemLabels.size()) {
@@ -204,10 +207,18 @@ public final class LobbyScreen extends ContentScreen {
     this.ipFieldFocused = (newMode == Mode.JOINING);
     this.lastPlayerCount = -1;
     this.offsets.clear();
+
+    if (newMode == Mode.JOINING) {
+      startLanListening();
+    } else {
+      lanDiscovery.stop();
+    }
+
     int itemCount = getItemCount();
     for (int i = 0; i < itemCount; i++) {
       this.offsets.put(i, new SmoothedValue(0.0, 0.5));
     }
+
     if (rootPane != null) {
       Platform.runLater(this::buildUI);
     }
@@ -246,6 +257,40 @@ public final class LobbyScreen extends ContentScreen {
     }
   }
 
+  private void startLanListening() {
+    lanDiscovery.startListening(
+        ip ->
+            Platform.runLater(
+                () -> {
+                  if (currentMode != Mode.JOINING || discoveredServersBox == null) {
+                    return;
+                  }
+
+                  boolean alreadyExists =
+                      discoveredServersBox.getChildren().stream()
+                          .anyMatch(
+                              node -> node.getUserData() != null && node.getUserData().equals(ip));
+
+                  if (alreadyExists) {
+                    return;
+                  }
+
+                  Button joinButton = new Button("Join " + ip);
+                  joinButton.setUserData(ip);
+                  joinButton.setStyle("-fx-font-size: 16px; -fx-padding: 8px 18px;");
+
+                  joinButton.setOnAction(
+                      e -> {
+                        if (ipField != null) {
+                          ipField.setText(ip);
+                        }
+                        connectToHost(ip);
+                      });
+
+                  discoveredServersBox.getChildren().add(joinButton);
+                }));
+  }
+
   private void buildUI() {
     if (rootPane == null) {
       return;
@@ -260,7 +305,6 @@ public final class LobbyScreen extends ContentScreen {
 
     itemLabels.clear();
 
-    // Top Title block
     Label titleLabel;
     if (currentMode == Mode.CHOOSE) {
       titleLabel = UiFactory.createTitle("Multiplayer Lobby", titleFont, textColor);
@@ -274,7 +318,6 @@ public final class LobbyScreen extends ContentScreen {
     topContainer.setAlignment(Pos.TOP_CENTER);
     topContainer.setPadding(new Insets(80, 0, 0, 0));
 
-    // Selection/Content block in Center
     VBox menuContainer = new VBox(20);
     menuContainer.setAlignment(Pos.CENTER_LEFT);
     menuContainer.setPadding(new Insets(0, 0, 0, 100));
@@ -310,7 +353,7 @@ public final class LobbyScreen extends ContentScreen {
     } else if (currentMode == Mode.JOINING) {
       statusLabel =
           UiFactory.createLabel(
-              "Enter Host IP (e.g., 192.168.1.50) and Press Enter", labelFont, textColor);
+              "Enter Host IP, or select a discovered LAN server", labelFont, textColor);
 
       ipField = new TextField("localhost");
       ipField.setMaxWidth(300);
@@ -342,7 +385,13 @@ public final class LobbyScreen extends ContentScreen {
       VBox fieldBox = new VBox(15, statusLabel, ipField);
       fieldBox.setAlignment(Pos.CENTER);
       fieldBox.setPadding(new Insets(0, 0, 20, 0));
-      menuContainer.getChildren().add(fieldBox);
+
+      Label lanLabel = UiFactory.createLabel("LAN Servers", labelFont, selectedColor);
+
+      discoveredServersBox = new VBox(10);
+      discoveredServersBox.setAlignment(Pos.CENTER);
+
+      menuContainer.getChildren().addAll(fieldBox, lanLabel, discoveredServersBox);
 
       for (JoiningItem item : JoiningItem.values()) {
         Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
@@ -351,7 +400,6 @@ public final class LobbyScreen extends ContentScreen {
       }
     }
 
-    // Keyboard navigation hints at Bottom
     Font hintFont = ctx.assets().getFont(FontKey.LABEL);
     Font iconFont = ctx.assets().getFont(FontKey.HINT);
     Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
@@ -408,12 +456,12 @@ public final class LobbyScreen extends ContentScreen {
   private void startHosting() {
     setMode(Mode.HOSTING);
 
-    // Spin up local GameServer in separate thread
     new Thread(
             () -> {
               try {
                 server = new GameServer();
                 server.start();
+                lanDiscovery.startBroadcasting(resolvedIp);
 
                 Platform.runLater(
                     () -> {
@@ -422,7 +470,6 @@ public final class LobbyScreen extends ContentScreen {
                       }
                     });
 
-                // Host connects to own local server
                 connectToHost("localhost");
               } catch (Exception e) {
                 System.err.println(
@@ -460,6 +507,7 @@ public final class LobbyScreen extends ContentScreen {
       server.stop();
       server = null;
     }
+    lanDiscovery.stop();
     setMode(Mode.CHOOSE);
   }
 
@@ -474,7 +522,6 @@ public final class LobbyScreen extends ContentScreen {
           }
         });
 
-    // Spawn client connection thread
     new Thread(
             () -> {
               Socket socket = null;
@@ -504,6 +551,11 @@ public final class LobbyScreen extends ContentScreen {
                   } else if (line.equals("START")) {
                     final int finalPlayerId = playerId;
                     final Socket finalSocket = socket;
+
+                    socketHandedOffToGame = true;
+                    activeSocket = null;
+                    lanDiscovery.stop();
+
                     Platform.runLater(
                         () -> {
                           try {
@@ -517,7 +569,7 @@ public final class LobbyScreen extends ContentScreen {
                             if (ipField != null) ipField.setDisable(false);
                           }
                         });
-                    return; // Socket ownership successfully handed off
+                    return;
                   }
                 }
 
@@ -630,10 +682,15 @@ public final class LobbyScreen extends ContentScreen {
 
   @Override
   protected void onBeforeExit() {
-    closeActiveSocket();
-    if (server != null) {
-      server.stop();
-      server = null;
+    lanDiscovery.stop();
+
+    if (!socketHandedOffToGame) {
+      closeActiveSocket();
+
+      if (server != null) {
+        server.stop();
+        server = null;
+      }
     }
   }
 }

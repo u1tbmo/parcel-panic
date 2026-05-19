@@ -5,11 +5,14 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.net.Socket;
+import java.util.Base64;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.PlayerIntent;
+
 
 /// Represents a single client connected to the server. Each connection runs in its own thread and
 /// handles receiving PlayerIntent from the client and sending GameState back.
@@ -48,7 +51,10 @@ public class ClientConnection implements Runnable {
       while (connected && (line = reader.readLine()) != null) {
         // Parse incoming message
         if (line.startsWith("INTENT:")) {
-          String json = line.substring(7); // Remove "INTENT:" prefix
+          String encodedJson = line.substring(7); // Remove "INTENT:" prefix
+          String json =
+              new String(Base64.getDecoder().decode(encodedJson), StandardCharsets.UTF_8);
+
           PlayerIntent intent = Serializer.deserializePlayerIntent(json);
           if (intent != null) {
             latestIntent = intent;
@@ -84,7 +90,10 @@ public class ClientConnection implements Runnable {
     try {
       String json = Serializer.serializeGameState(state);
       if (json != null) {
-        writer.write("STATE:" + json + "\n");
+        String encodedJson =
+            Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+
+        writer.write("STATE:" + encodedJson + "\n");
         writer.flush();
       }
     } catch (IOException e) {

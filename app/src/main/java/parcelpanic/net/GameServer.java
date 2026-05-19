@@ -13,12 +13,13 @@ import parcelpanic.shared.PlayerIntent;
 import parcelpanic.world.MapLoader;
 import parcelpanic.world.TileMap;
 
-/// The authoritative game server. Holds the master GameSimulation instance, accepts 4 client
+/// The authoritative game server. Holds the master GameSimulation instance, accepts client
 /// connections, collects their intents, updates the simulation, and broadcasts the resulting
 /// GameState back to all clients each frame.
 public class GameServer implements Runnable {
   private static final int PORT = 5555;
-  private static final int EXPECTED_CLIENTS = 4;
+  private static final int MAX_CLIENTS = 4;
+  private static final int MIN_CLIENTS_TO_START = 2;
   private static final double TICK_RATE = 1.0 / 60.0; // 60 FPS
 
   private ServerSocket serverSocket;
@@ -62,13 +63,16 @@ public class GameServer implements Runnable {
   private void acceptClients() {
     int nextClientId = 0;
 
-    while (running.get() && !matchStarted.get() && nextClientId < EXPECTED_CLIENTS) {
+    while (running.get() && !matchStarted.get() && nextClientId < MAX_CLIENTS) {
       try {
         Socket clientSocket = serverSocket.accept();
         int clientId = nextClientId++;
 
         ClientConnection conn = new ClientConnection(clientSocket, this, clientId);
         clients.add(conn);
+
+        // Add a vehicle for this connected client on the authoritative server simulation.
+        simulation.addPlayer(clientId, 0, 0);
 
         new Thread(conn).start();
 
@@ -82,7 +86,7 @@ public class GameServer implements Runnable {
                 + " accepted. ("
                 + clients.size()
                 + "/"
-                + EXPECTED_CLIENTS
+                + MAX_CLIENTS
                 + ")");
       } catch (IOException e) {
         if (running.get()) {
@@ -95,6 +99,11 @@ public class GameServer implements Runnable {
   }
 
   public void startMatch() {
+    if (clients.size() < MIN_CLIENTS_TO_START) {
+      System.out.println("[Server] Cannot start match: not enough clients");
+      return;
+    }
+
     matchStarted.set(true);
     synchronized (clientCountLock) {
       clientCountLock.notifyAll();
@@ -140,7 +149,7 @@ public class GameServer implements Runnable {
       if (dt > 0.1) dt = 0.1;
 
       // ===== GATHER PHASE =====
-      // Collect intents from all 4 clients
+      // Collect intents from connected clients
       List<PlayerIntent> intents = new ArrayList<>();
       for (ClientConnection client : clients) {
         if (client.isConnected()) {
@@ -190,7 +199,7 @@ public class GameServer implements Runnable {
   public void clientDisconnected(int clientId) {
     System.out.println("[Server] Client " + clientId + " disconnected");
 
-    if (clients.size() < EXPECTED_CLIENTS) {
+    if (matchStarted.get() && clients.size() < MIN_CLIENTS_TO_START) {
       System.out.println("[Server] Game interrupted: not enough clients");
       stop();
     }
