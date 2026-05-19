@@ -173,10 +173,16 @@ public final class MatchScreen extends ContentScreen {
 
     if (gameClient != null) {
       if (!gameClient.isRunning() && !kicked) {
-        kicked = true;
-        Platform.runLater(() -> {
-          ctx.navigator().push(new KickOverlay("Host Exited"));
-        });
+        // If the client stops running, check if it was due to a normal game end
+        GameState latest = gameClient.getLatestState();
+        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 1.0)) {
+          ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
+        } else {
+          kicked = true;
+          Platform.runLater(() -> {
+            ctx.navigator().push(new KickOverlay("Host Exited"));
+          });
+        }
         return;
       }
       playerId = Math.max(0, gameClient.getPlayerId() - 1);
@@ -187,14 +193,20 @@ public final class MatchScreen extends ContentScreen {
     if (gameClient != null) {
       if (gameClient.isRunning()) {
         gameClient.sendIntent(intent);
+        
+        // Also check if state dictates game end while running
+        GameState latest = gameClient.getLatestState();
+        if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 1.0)) {
+          ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
+        }
       }
       return;
     }
 
     localState = simulation.update(dt, List.of(intent));
 
-    if (localState.matchTimer() <= 0) {
-      ctx.navigator().requestSwitch(new ResultsScreen(1234));
+    if (localState.matchTimer() <= 0 || localState.unhappiness() >= 1.0) {
+      ctx.navigator().requestSwitch(new ResultsScreen((int) localState.score()));
     }
   }
 
