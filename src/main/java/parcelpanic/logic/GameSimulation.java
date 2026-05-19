@@ -279,4 +279,14 @@ public class GameSimulation {
   public double getMatchTimer() {
     return matchTimer;
   }
+
+  public void removePlayer(int id) {
+    vehicles.remove(id);
+    interactionGauges.remove(id);
+    for (ParcelLogic p : parcels) {
+      if (p.carrierId() != null && p.carrierId() == id) {
+        p.drop();
+      }
+    }
+  }
 }

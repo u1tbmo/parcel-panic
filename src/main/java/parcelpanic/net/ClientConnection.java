@@ -46,6 +46,10 @@ public class ClientConnection implements Runnable {
       writer.write("WELCOME:" + (clientId + 1) + "\n");
       writer.flush();
 
+      // Broadcast join announcement
+      String joinMsg = "[System] Player " + (clientId + 1) + (clientId == 0 ? " (Host)" : "") + " has joined the lobby!";
+      server.broadcastChatMessage(joinMsg);
+
       // Main client loop: receive intents and send state
       String line;
       while (connected && (line = reader.readLine()) != null) {
@@ -59,6 +63,9 @@ public class ClientConnection implements Runnable {
           if (intent != null) {
             latestIntent = intent;
           }
+        } else if (line.startsWith("CHAT:")) {
+          String chatMsg = line.substring(5);
+          server.broadcastChatMessage("Player " + (clientId + 1) + ": " + chatMsg);
         } else if (line.equals("PING")) {
           writer.write("PONG\n");
           writer.flush();
@@ -76,6 +83,17 @@ public class ClientConnection implements Runnable {
     if (!connected) return;
     try {
       writer.write("START\n");
+      writer.flush();
+    } catch (IOException e) {
+      connected = false;
+    }
+  }
+
+  /// Send a chat message to this client.
+  public void sendChatMessage(String message) {
+    if (!connected) return;
+    try {
+      writer.write("CHAT:" + message + "\n");
       writer.flush();
     } catch (IOException e) {
       connected = false;
@@ -137,6 +155,7 @@ public class ClientConnection implements Runnable {
     }
 
     System.out.println("[Server] Client " + clientId + " disconnected");
+    server.broadcastChatMessage("[System] Player " + (clientId + 1) + " has left the lobby.");
     server.clientDisconnected(clientId);
   }
 }

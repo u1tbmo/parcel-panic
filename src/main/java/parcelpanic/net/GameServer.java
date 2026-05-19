@@ -22,6 +22,12 @@ public class GameServer implements Runnable {
   private static final int MIN_CLIENTS_TO_START = 2;
   private static final double TICK_RATE = 1.0 / 60.0; // 60 FPS
 
+  private static volatile GameServer activeServer = null;
+
+  public static GameServer getActiveServer() {
+    return activeServer;
+  }
+
   private ServerSocket serverSocket;
   private GameSimulation simulation;
   private TileMap map;
@@ -36,6 +42,13 @@ public class GameServer implements Runnable {
   /// to accept client connections.
   public void start() throws IOException {
     System.out.println("[Server] Initializing...");
+
+    GameServer currentActive = activeServer;
+    if (currentActive != null) {
+      System.out.println("[Server] Stopping active server before bind...");
+      currentActive.stop();
+    }
+    activeServer = this;
 
     // Load the map (same as the client)
     map = MapLoader.loadFromText("/maps/map.txt");
@@ -115,6 +128,13 @@ public class GameServer implements Runnable {
     System.out.println("[Server] Broadcasting START to all clients!");
     for (ClientConnection client : clients) {
       client.sendStart();
+    }
+  }
+
+  public void broadcastChatMessage(String message) {
+    System.out.println("[Server] Broadcasting CHAT: " + message);
+    for (ClientConnection client : clients) {
+      client.sendChatMessage(message);
     }
   }
 
@@ -198,6 +218,9 @@ public class GameServer implements Runnable {
   /// Called by ClientConnection when a client disconnects.
   public void clientDisconnected(int clientId) {
     System.out.println("[Server] Client " + clientId + " disconnected");
+    if (simulation != null) {
+      simulation.removePlayer(clientId);
+    }
 
     if (matchStarted.get() && clients.size() < MIN_CLIENTS_TO_START) {
       System.out.println("[Server] Game interrupted: not enough clients");
@@ -208,6 +231,10 @@ public class GameServer implements Runnable {
   /// Stop the server and clean up.
   public void stop() {
     running.set(false);
+
+    if (activeServer == this) {
+      activeServer = null;
+    }
 
     // Disconnect all clients
     for (ClientConnection client : clients) {

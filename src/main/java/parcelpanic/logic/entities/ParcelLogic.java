@@ -100,6 +100,15 @@ public class ParcelLogic {
     this.vy = 0;
   }
 
+  public void drop() {
+    this.currentState = State.ON_GROUND;
+    this.carrierId = null;
+    this.vx = 0;
+    this.vy = 0;
+    this.vz = 0;
+    this.z = 0;
+  }
+
   public void bounceX() {
     this.vx = -this.vx * MatchRules.PARCEL_BOUNCE;
   }

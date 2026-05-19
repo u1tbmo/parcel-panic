@@ -1,6 +1,7 @@
 package parcelpanic.screens;
 
 import java.util.List;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -47,6 +48,7 @@ public final class MatchScreen extends ContentScreen {
   private LocalPlayerController inputController;
   private GameState localState;
   private final GameClient gameClient;
+  private boolean kicked = false;
 
   public MatchScreen() {
     this.gameClient = null;
@@ -170,13 +172,22 @@ public final class MatchScreen extends ContentScreen {
     int playerId = 0;
 
     if (gameClient != null) {
+      if (!gameClient.isRunning() && !kicked) {
+        kicked = true;
+        Platform.runLater(() -> {
+          ctx.navigator().push(new KickOverlay("Host Exited"));
+        });
+        return;
+      }
       playerId = Math.max(0, gameClient.getPlayerId() - 1);
     }
 
     PlayerIntent intent = inputController.createIntent(playerId, ctx.input());
 
     if (gameClient != null) {
-      gameClient.sendIntent(intent);
+      if (gameClient.isRunning()) {
+        gameClient.sendIntent(intent);
+      }
       return;
     }
 
@@ -271,6 +282,18 @@ public final class MatchScreen extends ContentScreen {
   public void onKeyPressed(InputAction action) {
     if (action == InputAction.PAUSE) {
       ctx.navigator().push(new PauseOverlay());
+    }
+  }
+
+  @Override
+  protected void onBeforeExit() {
+    if (gameClient != null) {
+      gameClient.disconnect();
+    }
+    // Stop the active local server if we are the host
+    parcelpanic.net.GameServer server = parcelpanic.net.GameServer.getActiveServer();
+    if (server != null) {
+      server.stop();
     }
   }
 }

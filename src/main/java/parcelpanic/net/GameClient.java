@@ -97,6 +97,10 @@ public class GameClient {
     return playerId;
   }
 
+  public boolean isRunning() {
+    return running;
+  }
+
   public void disconnect() {
     running = false;
     try {

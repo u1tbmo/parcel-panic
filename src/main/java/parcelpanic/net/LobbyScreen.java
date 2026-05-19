@@ -17,6 +17,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
@@ -114,6 +115,12 @@ public final class LobbyScreen extends ContentScreen {
   private final LanDiscoveryService lanDiscovery = new LanDiscoveryService();
   private VBox discoveredServersBox;
 
+  // Lobby Chat UI
+  private VBox chatPanel;
+  private VBox chatMessagesContainer;
+  private ScrollPane chatScrollPane;
+  private TextField chatInputField;
+
   @Override
   protected VideoManager.ViewportMode viewportMode() {
     return VideoManager.ViewportMode.FULL_WINDOW;
@@ -187,7 +194,7 @@ public final class LobbyScreen extends ContentScreen {
                   () -> {
                     resolvedIp = ip;
                     if (ipInfoLabel != null) {
-                      ipInfoLabel.setText("Share your IP with joiners: " + resolvedIp);
+                      ipInfoLabel.setText("IP: " + resolvedIp);
                     }
                   });
             },
@@ -338,7 +345,7 @@ public final class LobbyScreen extends ContentScreen {
       statusLabel = UiFactory.createLabel("Starting local server...", labelFont, textColor);
       ipInfoLabel =
           UiFactory.createLabel(
-              "Share your IP with joiners: " + resolvedIp, labelFont, selectedColor);
+              "IP: " + resolvedIp, labelFont, selectedColor);
 
       VBox infoBox = new VBox(10, statusLabel, ipInfoLabel);
       infoBox.setPadding(new Insets(0, 0, 20, 0));
@@ -423,12 +430,36 @@ public final class LobbyScreen extends ContentScreen {
     HBox hintsRow = new HBox(40, navigateHint, selectHint);
     hintsRow.setAlignment(Pos.CENTER);
 
+    if (currentMode == Mode.HOSTING || (currentMode == Mode.JOINING && activeSocket != null)) {
+      Node chatHint =
+          UiFactory.createHint(
+              InputHintProvider.getIcon(KeyCode.T),
+              "Chat",
+              iconFont,
+              hintFont,
+              hintColor);
+      hintsRow.getChildren().add(chatHint);
+    }
+
     VBox bottomContainer = new VBox(20, hintsRow);
     bottomContainer.setAlignment(Pos.BOTTOM_CENTER);
     bottomContainer.setPadding(new Insets(0, 0, 60, 0));
 
     rootPane.setTop(topContainer);
-    rootPane.setCenter(menuContainer);
+
+    if (currentMode == Mode.HOSTING || (currentMode == Mode.JOINING && activeSocket != null)) {
+      VBox chatSide = buildChatPanel();
+      HBox splitBox = new HBox(40);
+      splitBox.setAlignment(Pos.CENTER);
+      splitBox.setPadding(new Insets(0, 50, 0, 50));
+      menuContainer.setPrefWidth(700);
+      chatSide.setPrefWidth(430);
+      splitBox.getChildren().addAll(menuContainer, chatSide);
+      rootPane.setCenter(splitBox);
+    } else {
+      rootPane.setCenter(menuContainer);
+    }
+
     rootPane.setBottom(bottomContainer);
 
     updateSelectionColors();
@@ -533,6 +564,7 @@ public final class LobbyScreen extends ContentScreen {
 
                 Platform.runLater(
                     () -> {
+                      buildUI();
                       if (statusLabel != null) {
                         if (server != null) {
                           statusLabel.setText(
@@ -548,6 +580,9 @@ public final class LobbyScreen extends ContentScreen {
                 while ((line = reader.readLine()) != null) {
                   if (line.startsWith("WELCOME:")) {
                     playerId = Integer.parseInt(line.substring(8));
+                  } else if (line.startsWith("CHAT:")) {
+                    String chatMsg = line.substring(5);
+                    Platform.runLater(() -> addChatMessage(chatMsg));
                   } else if (line.equals("START")) {
                     final int finalPlayerId = playerId;
                     final Socket finalSocket = socket;
@@ -578,8 +613,10 @@ public final class LobbyScreen extends ContentScreen {
                 }
                 Platform.runLater(
                     () -> {
-                      if (statusLabel != null) {
-                        statusLabel.setText("Connection closed by server.");
+                      closeActiveSocket();
+                      buildUI();
+                      if (server == null) {
+                        ctx.navigator().push(new parcelpanic.screens.KickOverlay("Host Exited"));
                       }
                       if (ipField != null) ipField.setDisable(false);
                     });
@@ -594,8 +631,15 @@ public final class LobbyScreen extends ContentScreen {
                 }
                 Platform.runLater(
                     () -> {
-                      if (statusLabel != null) {
-                        statusLabel.setText("Connection failed: " + e.getMessage());
+                      boolean wasConnected = (activeSocket != null);
+                      closeActiveSocket();
+                      buildUI();
+                      if (wasConnected && server == null) {
+                        ctx.navigator().push(new parcelpanic.screens.KickOverlay("Host Exited"));
+                      } else {
+                        if (statusLabel != null) {
+                          statusLabel.setText("Connection failed: " + e.getMessage());
+                        }
                       }
                       if (ipField != null) ipField.setDisable(false);
                     });
@@ -678,6 +722,114 @@ public final class LobbyScreen extends ContentScreen {
       }
       default -> {}
     }
+  }
+
+  @Override
+  public boolean suppressActionBindings() {
+    return (chatInputField != null && chatInputField.isFocused()) || super.suppressActionBindings();
+  }
+
+  @Override
+  public void onRawKeyPressed(KeyCode code) {
+    if (code == KeyCode.T) {
+      if (chatInputField != null && !chatInputField.isFocused()) {
+        Platform.runLater(() -> chatInputField.requestFocus());
+      }
+    } else if (code == KeyCode.ESCAPE) {
+      if (chatInputField != null && chatInputField.isFocused()) {
+        Platform.runLater(() -> rootPane.requestFocus());
+      }
+    }
+  }
+
+  private VBox buildChatPanel() {
+    chatPanel = new VBox(15);
+    chatPanel.setPadding(new Insets(20));
+    chatPanel.setAlignment(Pos.TOP_CENTER);
+    chatPanel.setStyle(
+        "-fx-background-color: rgba(30, 30, 30, 0.65);"
+            + " -fx-background-radius: 12px;"
+            + " -fx-border-color: rgba(255, 255, 255, 0.15);"
+            + " -fx-border-radius: 12px;"
+            + " -fx-border-width: 1px;");
+
+    // Title
+    Font titleFont = ctx.assets().getFont(FontKey.TITLE);
+    Label chatTitle = UiFactory.createLabel("LOBBY CHAT", titleFont, selectedColor);
+    chatTitle.setAlignment(Pos.CENTER);
+
+    // Messages Container inside ScrollPane
+    chatMessagesContainer = new VBox(8);
+    chatMessagesContainer.setAlignment(Pos.TOP_LEFT);
+
+    chatScrollPane = new ScrollPane(chatMessagesContainer);
+    chatScrollPane.setFitToWidth(true);
+    chatScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+    chatScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+    chatScrollPane.setPrefHeight(280);
+    chatScrollPane.setStyle(
+        "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
+
+    // Input text field
+    chatInputField = new TextField();
+    chatInputField.setPromptText("Press Enter to send message...");
+    chatInputField.setPrefWidth(380);
+    chatInputField.setStyle(
+        "-fx-background-color: rgba(0, 0, 0, 0.5);"
+            + " -fx-text-fill: white;"
+            + " -fx-prompt-text-fill: #888888;"
+            + " -fx-border-color: rgba(255, 255, 255, 0.1);"
+            + " -fx-border-radius: 6px;"
+            + " -fx-background-radius: 6px;"
+            + " -fx-padding: 8px 12px;");
+
+    chatInputField.setOnAction(e -> sendChat());
+
+    // Prevent navigation keys from bubbling when typing in chat
+    chatInputField.setOnKeyPressed(
+        event -> {
+          if (event.getCode() == KeyCode.ESCAPE) {
+            rootPane.requestFocus();
+            event.consume();
+          }
+        });
+
+    chatPanel.getChildren().addAll(chatTitle, chatScrollPane, chatInputField);
+    return chatPanel;
+  }
+
+  private void addChatMessage(String msg) {
+    if (chatMessagesContainer == null || chatScrollPane == null) return;
+
+    Font chatFont = ctx.assets().getFont(FontKey.LABEL);
+    Label messageLabel = new Label(msg);
+    messageLabel.setFont(chatFont);
+    messageLabel.setTextFill(textColor);
+    messageLabel.setWrapText(true);
+    messageLabel.setMaxWidth(380);
+
+    chatMessagesContainer.getChildren().add(messageLabel);
+
+    // Auto scroll to bottom
+    Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
+  }
+
+  private void sendChat() {
+    if (chatInputField == null || activeSocket == null) return;
+    String text = chatInputField.getText().trim();
+    if (text.isEmpty()) return;
+
+    new Thread(() -> {
+      try {
+        java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(activeSocket.getOutputStream(), java.nio.charset.StandardCharsets.UTF_8));
+        writer.write("CHAT:" + text + "\n");
+        writer.flush();
+      } catch (Exception e) {
+        System.err.println("[LobbyScreen] Error sending chat: " + e.getMessage());
+      }
+    }).start();
+
+    chatInputField.clear();
   }
 
   @Override

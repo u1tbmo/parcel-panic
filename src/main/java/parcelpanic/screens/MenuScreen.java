@@ -26,7 +26,8 @@ import parcelpanic.video.VideoManager;
 
 public final class MenuScreen extends ContentScreen {
   private enum Item {
-    START("Start"),
+    SINGLEPLAYER("Singleplayer"),
+    MULTIPLAYER("Multiplayer"),
     OPTIONS("Options"),
     EXIT("Exit");
 
@@ -41,7 +42,7 @@ public final class MenuScreen extends ContentScreen {
     }
   }
 
-  private Item selectedItem = Item.START;
+  private Item selectedItem = Item.SINGLEPLAYER;
 
   private final Map<Item, Label> menuLabels = new EnumMap<>(Item.class);
   private final Map<Item, SmoothedValue> offsets = new EnumMap<>(Item.class);
@@ -59,7 +60,7 @@ public final class MenuScreen extends ContentScreen {
 
   @Override
   protected void onBeforeBuild() {
-    this.selectedItem = Item.START;
+    this.selectedItem = Item.SINGLEPLAYER;
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
     this.mutedColor = ctx.assets().getColor(ColorKey.TEXT_MUTED);
     this.selectedColor = ctx.assets().getColor(ColorKey.SUCCESS);
@@ -190,7 +191,8 @@ public final class MenuScreen extends ContentScreen {
       case CONFIRM -> {
         ctx.audio().playSound(AudioKey.CLICK);
         switch (selectedItem) {
-          case START -> ctx.navigator().requestSwitch(new LobbyScreen());
+          case SINGLEPLAYER -> ctx.navigator().requestSwitch(new MatchScreen());
+          case MULTIPLAYER -> ctx.navigator().requestSwitch(new LobbyScreen());
           case OPTIONS -> ctx.navigator().requestSwitch(new OptionsScreen());
           case EXIT -> ctx.stage().close();
         }
