@@ -8,6 +8,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -22,6 +23,7 @@ import parcelpanic.media.UiFactory;
 import parcelpanic.net.GameClient;
 import parcelpanic.screen.ContentScreen;
 import parcelpanic.shared.GameState;
+import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.PlayerIntent;
 import parcelpanic.video.VideoManager;
 import parcelpanic.view.GameRenderer;
@@ -30,6 +32,8 @@ import parcelpanic.world.TileMap;
 
 public final class MatchScreen extends ContentScreen {
   private Label timerLabel;
+  private Label moneyLabel;
+  private Label parcelListLabel;
   private BorderPane rootPane;
 
   private Color textColor;
@@ -73,9 +77,7 @@ public final class MatchScreen extends ContentScreen {
     this.simulation = new GameSimulation(tileMap);
     this.inputController = new LocalPlayerController();
 
-    // Add players so vehicles exist and can render
     simulation.addPlayer(0, 0, 0);
-
     if (gameClient != null) {
       simulation.addPlayer(1, 0, 0);
     }
@@ -102,29 +104,46 @@ public final class MatchScreen extends ContentScreen {
 
   private void buildUI() {
     rootPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    // rootPane.setBackground(
-    //     UiFactory.createBackground(
-    //             surfaceDark, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
-    //         .getBackground());
+    rootPane.setMouseTransparent(true);
 
-    VBox centerContainer = createCenterContainer();
-    VBox bottomContainer = createBottomContainer();
-
-    rootPane.setCenter(centerContainer);
-    rootPane.setBottom(bottomContainer);
+    rootPane.setTop(createTopHud());
+    rootPane.setLeft(createSidePane("ACTIVE PACKAGES"));
+    rootPane.setRight(createSidePane("FAILED / MISSED"));
+    rootPane.setBottom(createBottomContainer());
   }
 
-  private VBox createCenterContainer() {
-    Font font = ctx.assets().getFont(FontKey.HEADLINE);
-    Label status = UiFactory.createLabel("MATCH RUNNING", font, textColor);
+  private HBox createTopHud() {
+    Font font = ctx.assets().getFont(FontKey.TITLE);
 
-    Font timerFont = ctx.assets().getFont(FontKey.TITLE);
-    timerLabel = UiFactory.createLabel("Time: 180", timerFont, textColor);
+    timerLabel = UiFactory.createLabel("Time: 180", font, textColor);
+    moneyLabel = UiFactory.createLabel("$0", font, textColor);
 
-    VBox container = new VBox(20);
-    container.setAlignment(Pos.CENTER);
-    container.getChildren().addAll(status, timerLabel);
-    return container;
+    HBox topHud = new HBox(80, timerLabel, moneyLabel);
+    topHud.setAlignment(Pos.TOP_CENTER);
+    topHud.setPadding(new Insets(16, 0, 0, 0));
+
+    return topHud;
+  }
+
+  private VBox createSidePane(String title) {
+    Font titleFont = ctx.assets().getFont(FontKey.LABEL);
+    Font bodyFont = ctx.assets().getFont(FontKey.LABEL);
+
+    Label titleLabel = UiFactory.createLabel(title, titleFont, textColor);
+
+    parcelListLabel = UiFactory.createLabel("No packages yet", bodyFont, textColor);
+    parcelListLabel.setWrapText(true);
+
+    VBox pane = new VBox(12, titleLabel, parcelListLabel);
+    pane.setAlignment(Pos.TOP_CENTER);
+    pane.setPadding(new Insets(20));
+    pane.setPrefWidth(150);
+    pane.setStyle(
+        "-fx-background-color: rgba(0, 0, 0, 0.55);"
+            + "-fx-border-color: white;"
+            + "-fx-border-width: 2;");
+
+    return pane;
   }
 
   private VBox createBottomContainer() {
@@ -142,7 +161,7 @@ public final class MatchScreen extends ContentScreen {
 
     VBox container = new VBox(pauseHint);
     container.setAlignment(Pos.BOTTOM_CENTER);
-    container.setPadding(new Insets(0, 0, 60, 0));
+    container.setPadding(new Insets(0, 0, 20, 0));
     return container;
   }
 
@@ -170,36 +189,82 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   public void render(double alpha) {
-    GameState state;
+    GameState state = getRenderableState();
 
-    if (gameClient != null) {
-      state = gameClient.getLatestState();
-
-      if (state == null) {
-        state = localState;
-      } else if (state.map() == null) {
-        state =
-            new GameState(
-                state.matchTimer(),
-                state.unhappiness(),
-                state.score(),
-                state.vehicles(),
-                state.parcels(),
-                tileMap);
-      }
-    } else {
-      state = localState;
-    }
-
-    if (timerLabel != null) {
-      timerLabel.setText("Time: " + Math.max(0, (int) state.matchTimer()));
-    }
+    updateHud(state);
 
     if (gameCanvas != null && gameRenderer != null) {
       GraphicsContext gc = gameCanvas.getGraphicsContext2D();
       gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
       gameRenderer.render(gc, state, alpha);
     }
+  }
+
+  private GameState getRenderableState() {
+    if (gameClient != null) {
+      GameState state = gameClient.getLatestState();
+
+      if (state == null) {
+        return localState;
+      }
+
+      if (state.map() == null) {
+        return new GameState(
+            state.matchTimer(),
+            state.unhappiness(),
+            state.score(),
+            state.vehicles(),
+            state.parcels(),
+            tileMap);
+      }
+
+      return state;
+    }
+
+    return localState;
+  }
+
+  private void updateHud(GameState state) {
+    if (state == null) {
+      return;
+    }
+
+    if (timerLabel != null) {
+      int seconds = Math.max(0, (int) state.matchTimer());
+      int minutes = seconds / 60;
+      int remainingSeconds = seconds % 60;
+
+      timerLabel.setText(String.format("Time: %02d:%02d", minutes, remainingSeconds));
+    }
+
+    if (moneyLabel != null) {
+      moneyLabel.setText("$" + (int) state.score());
+    }
+
+    if (parcelListLabel != null) {
+      parcelListLabel.setText(buildParcelListText(state));
+    }
+  }
+
+  private String buildParcelListText(GameState state) {
+    if (state.parcels() == null || state.parcels().isEmpty()) {
+      return "No packages yet";
+    }
+
+    StringBuilder builder = new StringBuilder();
+
+    for (ParcelState parcel : state.parcels()) {
+      builder
+          .append("Package ")
+          .append(parcel.id())
+          .append("\nTarget: ")
+          .append(parcel.targetHouseId())
+          .append("\nTime: ")
+          .append((int) parcel.remainingTime())
+          .append("s\n\n");
+    }
+
+    return builder.toString();
   }
 
   @Override
