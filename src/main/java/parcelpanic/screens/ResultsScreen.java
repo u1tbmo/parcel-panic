@@ -4,7 +4,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.StackPane; 
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -12,16 +15,18 @@ import parcelpanic.input.InputAction;
 import parcelpanic.input.InputHintProvider;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
+import parcelpanic.media.AssetKeys.ImageKey; 
 import parcelpanic.media.UiFactory;
 import parcelpanic.screen.ContentScreen;
 import parcelpanic.video.VideoManager;
 
 public final class ResultsScreen extends ContentScreen {
   private final int score;
+  
+  private StackPane rootContainer;
   private BorderPane rootPane;
 
   private Color textColor;
-  private Color surfaceBlack;
 
   public ResultsScreen(int score) {
     this.score = score;
@@ -35,21 +40,32 @@ public final class ResultsScreen extends ContentScreen {
   @Override
   protected void onBeforeBuild() {
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
-    this.surfaceBlack = ctx.assets().getColor(ColorKey.SURFACE_BLACK);
   }
 
   @Override
   protected Node createContent() {
     buildUI();
-    return rootPane;
+    return rootContainer;
   }
 
   private void buildUI() {
+    rootContainer = new StackPane();
+    rootContainer.setPrefSize(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+
+    Image backgroundImage = ctx.assets().getImage(ImageKey.MENU_RESULTS);
+    if (backgroundImage != null) {
+      ImageView bgImageView = new ImageView(backgroundImage);
+      bgImageView.setFitWidth(VideoManager.LOGICAL_WIDTH);
+      bgImageView.setFitHeight(VideoManager.LOGICAL_HEIGHT);
+      bgImageView.setPreserveRatio(false);
+      bgImageView.setSmooth(false); 
+      
+      rootContainer.getChildren().add(bgImageView);
+    }
+
+
     rootPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    rootPane.setBackground(
-        UiFactory.createBackground(
-                surfaceBlack, VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT)
-            .getBackground());
+    rootPane.setBackground(null);
 
     VBox topContainer = createTopContainer();
     VBox centerContainer = createCenterContainer();
@@ -58,11 +74,14 @@ public final class ResultsScreen extends ContentScreen {
     rootPane.setTop(topContainer);
     rootPane.setCenter(centerContainer);
     rootPane.setBottom(bottomContainer);
+
+
+    rootContainer.getChildren().add(rootPane);
   }
 
   private VBox createTopContainer() {
     Font font = ctx.assets().getFont(FontKey.HEADLINE);
-    Label title = UiFactory.createTitle("RESULTS", font, textColor);
+    Label title = UiFactory.createTitle("", font, textColor);
     VBox container = new VBox(title);
     container.setAlignment(Pos.TOP_CENTER);
     container.setPadding(new Insets(80, 0, 0, 0));

@@ -61,6 +61,8 @@ public final class AssetKeys {
     MAP_LAYER_TARGET("map_renders/target_call.png"),
 
     MENU_MAIN("menu/title.gif"),
+    MENU_LOBBY("menu/lobby.gif"),
+    MENU_RESULTS("menu/results.gif"),
 
     ENTITY_PARCEL("entities/parcel.png"),
     EMOTE_CROSS("emotes/emote_cross.png");
