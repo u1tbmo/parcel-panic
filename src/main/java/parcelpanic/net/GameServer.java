@@ -21,6 +21,7 @@ public class GameServer implements Runnable {
   private static final int MAX_CLIENTS = 4;
   private static final int MIN_CLIENTS_TO_START = 2;
   private static final double TICK_RATE = 1.0 / 60.0; // 60 FPS
+  private static final double PRE_GAME_SECONDS = 3.0;
 
   private static volatile GameServer activeServer = null;
 
@@ -56,8 +57,8 @@ public class GameServer implements Runnable {
       throw new RuntimeException("Failed to load map");
     }
 
-    // Create the master simulation
-    simulation = new GameSimulation(map);
+    // Create the master simulation (no audio in headless server)
+    simulation = new GameSimulation(map, null);
 
     // Open ServerSocket
     serverSocket = new ServerSocket(PORT);
@@ -85,7 +86,7 @@ public class GameServer implements Runnable {
         clients.add(conn);
 
         // Add a vehicle for this connected client on the authoritative server simulation.
-        simulation.addPlayer(clientId, 0, 0);
+        simulation.addPlayer(clientId, 0, 0, conn.getCustomName());
 
         new Thread(conn).start();
 
@@ -140,6 +141,54 @@ public class GameServer implements Runnable {
     System.out.println("[Server] Broadcasting CHAT: " + message);
     for (ClientConnection client : clients) {
       client.sendChatMessage(message);
+    }
+  }
+
+  public void updatePlayerName(int clientId, String name) {
+    if (simulation != null) {
+      simulation.setVehiclePlayerName(clientId, name);
+    }
+  }
+
+  public String resolveUniqueName(String desired, int excludeClientId) {
+    List<String> existing = new ArrayList<>();
+    for (ClientConnection c : clients) {
+      if (c.getClientId() != excludeClientId && c.isConnected()) {
+        existing.add(c.getCustomName());
+      }
+    }
+    if (!existing.contains(desired)) {
+      return desired;
+    }
+    int suffix = 1;
+    while (existing.contains(desired + " (" + suffix + ")")) {
+      suffix++;
+    }
+    return desired + " (" + suffix + ")";
+  }
+
+  public int resolveUniqueColor(int desiredColor, int excludeClientId) {
+    int desiredHue = desiredColor / 10;
+    List<Integer> takenHues = new ArrayList<>();
+    for (ClientConnection c : clients) {
+      if (c.getClientId() != excludeClientId && c.isConnected()) {
+        takenHues.add(c.getCarColorIndex() / 10);
+      }
+    }
+    if (!takenHues.contains(desiredHue)) {
+      return desiredColor;
+    }
+    for (int i = 0; i < 7; i++) {
+      if (!takenHues.contains(i)) {
+        return i * 10 + (desiredColor % 10);
+      }
+    }
+    return desiredColor;
+  }
+
+  public void setVehicleColor(int clientId, int colorIndex) {
+    if (simulation != null) {
+      simulation.setVehicleColor(clientId, colorIndex);
     }
   }
 
@@ -204,6 +253,34 @@ public class GameServer implements Runnable {
 
     long lastTickTime = System.nanoTime();
 
+    // Pre-game countdown so clients can show 3-2-1-Go before simulation starts
+    double preGameTimer = PRE_GAME_SECONDS;
+    while (preGameTimer > 0 && running.get()) {
+      long now = System.nanoTime();
+      double dt = (now - lastTickTime) / 1_000_000_000.0;
+      lastTickTime = now;
+      if (dt > 0.1) dt = 0.1;
+
+      preGameTimer -= dt;
+
+      // Broadcast initial state with full match timer so clients can render the world
+      GameState initState = simulation.generateSnapshot();
+      for (ClientConnection client : clients) {
+        if (client.isConnected()) {
+          client.sendGameState(initState);
+        }
+      }
+
+      try {
+        long sleepTime = (long) ((TICK_RATE - dt) * 1_000);
+        if (sleepTime > 0) {
+          Thread.sleep(sleepTime);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
     while (running.get()) {
       long now = System.nanoTime();
       double dt = (now - lastTickTime) / 1_000_000_000.0; // Convert nanoseconds to seconds
@@ -224,6 +301,17 @@ public class GameServer implements Runnable {
       // ===== SIMULATE PHASE =====
       GameState newState = simulation.update(dt, intents);
 
+      // ===== SOUND PHASE =====
+      List<String> sounds = simulation.drainSounds();
+      if (!sounds.isEmpty()) {
+        String soundMsg = "SOUND:" + String.join(",", sounds);
+        for (ClientConnection client : clients) {
+          if (client.isConnected()) {
+            client.sendRawMessage(soundMsg);
+          }
+        }
+      }
+
       // ===== BROADCAST PHASE =====
       for (ClientConnection client : clients) {
         if (client.isConnected()) {
@@ -235,7 +323,7 @@ public class GameServer implements Runnable {
       clients.removeIf(c -> !c.isConnected());
 
       // Check for match end conditions
-      if (newState.matchTimer() <= 0 || newState.unhappiness() >= 1.0) {
+      if (newState.matchTimer() <= 0 || newState.unhappiness() >= 100.0) {
         System.out.println(
             "[Server] Match ended. Timer: "
                 + newState.matchTimer()

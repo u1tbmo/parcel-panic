@@ -24,6 +24,10 @@ public class VehicleLogic {
   private VehicleState.PromptType prompt = VehicleState.PromptType.NONE;
   private int colorIndex = 1; // default to Red style 1
 
+  // 0..1 interaction progress for the current prompt.
+  private double interactProgress = 0.0;
+  private String playerName = "Player";
+
   public VehicleLogic(int id, double x, double y) {
     this.id = id;
     this.x = x;
@@ -62,25 +66,35 @@ public class VehicleLogic {
     }
     isAccelerating = intent.up() || intent.down() || intent.left() || intent.right();
 
-    double targetVx = 0;
-    double targetVy = 0;
+    double inputX = 0;
+    double inputY = 0;
 
     if (intent.up()) {
-      targetVy -= MatchRules.VEHICLE_MAX_SPEED;
+      inputY -= 1;
       rotation = 0;
     }
     if (intent.down()) {
-      targetVy += MatchRules.VEHICLE_MAX_SPEED;
+      inputY += 1;
       rotation = 180;
     }
     if (intent.left()) {
-      targetVx -= MatchRules.VEHICLE_MAX_SPEED;
+      inputX -= 1;
       rotation = 270;
     }
     if (intent.right()) {
-      targetVx += MatchRules.VEHICLE_MAX_SPEED;
+      inputX += 1;
       rotation = 90;
     }
+
+    // Normalize diagonal input so top speed is consistent.
+    double len = Math.hypot(inputX, inputY);
+    if (len > 1e-6) {
+      inputX /= len;
+      inputY /= len;
+    }
+
+    double targetVx = inputX * MatchRules.VEHICLE_MAX_SPEED;
+    double targetVy = inputY * MatchRules.VEHICLE_MAX_SPEED;
 
     // Determine X acceleration/friction
     double accelX = (targetVx != 0) ? MatchRules.VEHICLE_ACCELERATION : MatchRules.VEHICLE_FRICTION;
@@ -136,9 +150,28 @@ public class VehicleLogic {
     }
   }
 
+  public void setPlayerName(String name) {
+    this.playerName = name != null ? name : "Player";
+  }
+
   public VehicleState state() {
     return new VehicleState(
-        id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
+        id,
+        x,
+        y,
+        vx,
+        vy,
+        rotation,
+        isDashing,
+        isAccelerating,
+        prompt,
+        colorIndex,
+        interactProgress,
+        playerName);
+  }
+
+  public void setInteractProgress(double interactProgress) {
+    this.interactProgress = Math.max(0.0, Math.min(1.0, interactProgress));
   }
 
   public int getColorIndex() {

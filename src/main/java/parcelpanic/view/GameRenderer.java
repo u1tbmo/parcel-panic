@@ -24,6 +24,7 @@ import parcelpanic.world.TileMap.TileType;
 public final class GameRenderer {
   private static final int TILE_SIZE = 40;
   private static final double PROMPT_ICON_SIZE = 38.0;
+  private static final long VEHICLE_CHUG_PERIOD_MS = 100;
   private final AssetRegistry assets;
   private final ControlsSettings controls;
   private final Map<Integer, EntityInterpolator> vehicleInterpolators = new HashMap<>();
@@ -135,16 +136,21 @@ public final class GameRenderer {
         gc.restore();
       }
 
-      // Render target house ID if vehicle is carrying a parcel
+      // Render a subtle "carrying" indicator if vehicle has a parcel (no destination info).
       ParcelState carriedParcel = findCarriedParcel(state, vehicle.id());
       if (carriedParcel != null) {
         gc.save();
-        gc.setFont(assets.getFont(FontKey.LABEL, FontKey.LABEL.getDefaultSize()));
-        gc.setFill(Color.WHITE);
-        gc.setTextAlign(TextAlignment.CENTER);
-        gc.setTextBaseline(VPos.CENTER);
-        String targetNum = String.valueOf(carriedParcel.targetHouseId());
-        gc.fillText(targetNum, renderX, renderY - 28);
+        Image parcelIcon = assets.getImage(ImageKey.ENTITY_PARCEL);
+        if (parcelIcon != null) {
+          double iconSize = 32;
+          boolean isHorizontalFrame = frameIndex == 1 || frameIndex == 2;
+
+          long time = System.currentTimeMillis() + vehicle.id() * 120L;
+          int chugOffsetY = ((time / VEHICLE_CHUG_PERIOD_MS) % 2L == 0L) ? 1 : 0;
+
+          double iconY = renderY - 36 + (isHorizontalFrame ? 4 : 0) + chugOffsetY;
+          gc.drawImage(parcelIcon, renderX - iconSize / 2.0, iconY, iconSize, iconSize);
+        }
         gc.restore();
       }
 
@@ -212,6 +218,18 @@ public final class GameRenderer {
       gc.setTextBaseline(VPos.CENTER);
       gc.fillText(
           InputHintProvider.getIconForAction(InputAction.INTERACT, controls), centerX, centerY);
+
+      // Progress bar (0..1) for hold interactions.
+      double p = Math.max(0.0, Math.min(1.0, vehicle.interactProgress()));
+      if (p > 0.001) {
+        double w = 44;
+        double h = 6;
+        double y = centerY + 20;
+        gc.setFill(Color.rgb(0, 0, 0, 0.5));
+        gc.fillRoundRect(centerX - w / 2.0, y, w, h, 3, 3);
+        gc.setFill(Color.rgb(255, 255, 255, 0.9));
+        gc.fillRoundRect(centerX - w / 2.0 + 1, y + 1, (w - 2) * p, h - 2, 2, 2);
+      }
     }
 
     gc.restore();
@@ -328,7 +346,7 @@ public final class GameRenderer {
   public static ImageKey getImageKeyForVehicle(int id, int colorIndex) {
     int color = colorIndex / 10;
     long time = System.currentTimeMillis() + id * 120L;
-    int style = ((time / 500) % 2 == 0) ? 1 : 2;
+    int style = ((time / VEHICLE_CHUG_PERIOD_MS) % 2L == 0L) ? 1 : 2;
     return switch (color) {
       case 0 -> (style == 1) ? ImageKey.VEHICLE_CAR_RED_1 : ImageKey.VEHICLE_CAR_RED_2;
       case 1 -> (style == 1) ? ImageKey.VEHICLE_CAR_BLUE_1 : ImageKey.VEHICLE_CAR_BLUE_2;

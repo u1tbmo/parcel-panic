@@ -42,6 +42,7 @@ public class MapLoader {
                 case 'G' -> TileType.GRASS;
                 case 'H' -> TileType.HUB;
                 case 'T' -> TileType.TARGET_ZONE;
+                case 'F' -> TileType.FENCE;
                 default -> TileType.ROAD;
               };
           map.setTile(x, y, type);

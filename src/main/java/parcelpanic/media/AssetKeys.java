@@ -81,7 +81,16 @@ public final class AssetKeys {
   public enum AudioKey {
     CLICK("sfx/click_001"),
     MOVE_SELECTION("sfx/bong_001"),
-    ERROR("sfx/error_001");
+    ERROR("sfx/back_001"),
+    INTERACT_TAP("sfx/bong_001"),
+    PARCEL_EXPIRED("sfx/question_004"),
+    PARCEL_WARNING_ON("sfx/glass_005"),
+    PARCEL_WARNING_OFF("sfx/glass_002"),
+    COUNTDOWN_TICK("sfx/tick_001"),
+    PARCEL_THROW("sfx/pluck_001"),
+    PARCEL_CATCH("sfx/pluck_002"),
+    BACKGROUND_MUSIC("music/bg-music"),
+    RESULTS_MUSIC("music/results");
 
     private final String fileName;
 

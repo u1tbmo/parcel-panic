@@ -10,16 +10,24 @@ public class TileMap {
   private final TileType[][] grid;
 
   public enum TileType {
-    ROAD(false),
-    GRASS(false),
-    WALL(true),
-    HUB(false),
-    TARGET_ZONE(false);
+    ROAD(false, false, true),
+    GRASS(false, false, true),
+    WALL(true, true, false),
+    HUB(false, false, true),
+    TARGET_ZONE(false, false, true),
 
-    public final boolean isSolid;
+    // Vehicles can't pass through, parcels can fly/slide through, but parcels can't come to rest
+    // here.
+    FENCE(true, false, false);
 
-    TileType(boolean isSolid) {
-      this.isSolid = isSolid;
+    public final boolean blocksVehicles;
+    public final boolean blocksParcels;
+    public final boolean canParcelLand;
+
+    TileType(boolean blocksVehicles, boolean blocksParcels, boolean canParcelLand) {
+      this.blocksVehicles = blocksVehicles;
+      this.blocksParcels = blocksParcels;
+      this.canParcelLand = canParcelLand;
     }
   }
 

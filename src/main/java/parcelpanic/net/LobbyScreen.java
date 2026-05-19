@@ -9,10 +9,13 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -120,8 +123,8 @@ public final class LobbyScreen extends ContentScreen {
   private final List<Label> itemLabels = new ArrayList<>();
   private final List<String> activePlayers = new ArrayList<>();
   private final Map<Integer, SmoothedValue> offsets = new HashMap<>();
-  private String myPlayerName = "Player";
-  private int myColorIndex = 1; // Default to Red, Style 1
+  private String myPlayerName;
+  private int myColorIndex = -1; // Set in onBeforeBuild from settings or random
 
   private GameServer server;
   private Socket activeSocket;
@@ -205,6 +208,13 @@ public final class LobbyScreen extends ContentScreen {
 
   @Override
   protected void onBeforeBuild() {
+    this.myPlayerName = ctx.settings().playerName();
+    int savedColor = ctx.settings().colorIndex();
+    if (savedColor >= 0) {
+      this.myColorIndex = savedColor;
+    } else {
+      this.myColorIndex = 1; // default to Red, Style 1
+    }
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
     this.mutedColor = ctx.assets().getColor(ColorKey.TEXT_MUTED);
     this.selectedColor = ctx.assets().getColor(ColorKey.SUCCESS);
@@ -658,7 +668,59 @@ public final class LobbyScreen extends ContentScreen {
         activePlayers.add(p.trim());
       }
     }
+    ensureUniqueColor();
     buildUI();
+  }
+
+  private void ensureUniqueColor() {
+    int myHue = myColorIndex / 10;
+    int count = 0;
+    for (String entry : activePlayers) {
+      if (!entry.contains("|")) continue;
+      String[] parts = entry.split("\\|");
+      String colorName = parts[1].trim();
+      int color = switch (colorName.toLowerCase()) {
+        case "red" -> 0;
+        case "blue" -> 1;
+        case "green" -> 2;
+        case "yellow" -> 3;
+        case "orange" -> 4;
+        case "pink" -> 5;
+        case "magenta" -> 6;
+        default -> -1;
+      };
+      if (color == myHue) count++;
+    }
+
+    if (count > 1) {
+      Set<Integer> takenColors = new HashSet<>();
+      for (String entry : activePlayers) {
+        if (!entry.contains("|")) continue;
+        String[] parts = entry.split("\\|");
+        String colorName = parts[1].trim();
+        int color = switch (colorName.toLowerCase()) {
+          case "red" -> 0;
+          case "blue" -> 1;
+          case "green" -> 2;
+          case "yellow" -> 3;
+          case "orange" -> 4;
+          case "pink" -> 5;
+          case "magenta" -> 6;
+          default -> -1;
+        };
+        if (color >= 0) takenColors.add(color);
+      }
+
+      for (int i = 0; i < 7; i++) {
+        if (!takenColors.contains(i)) {
+          myColorIndex = i * 10 + 1;
+          ctx.settings().setColorIndex(myColorIndex);
+          ctx.settings().save();
+          sendNameColorUpdate();
+          break;
+        }
+      }
+    }
   }
 
   private String getColorName(int colorIndex) {
@@ -695,6 +757,23 @@ public final class LobbyScreen extends ContentScreen {
     return color * 10 + style;
   }
 
+  private String resolveUniqueName(String desired) {
+    Set<String> existing = new HashSet<>();
+    for (String entry : activePlayers) {
+      String name = entry.contains("|") ? entry.split("\\|")[0].trim() : entry.trim();
+      existing.add(name);
+    }
+    existing.remove(myPlayerName);
+    if (!existing.contains(desired)) {
+      return desired;
+    }
+    int suffix = 1;
+    while (existing.contains(desired + " (" + suffix + ")")) {
+      suffix++;
+    }
+    return desired + " (" + suffix + ")";
+  }
+
   private void sendNameColorUpdate() {
     if (activeSocket != null && !socketHandedOffToGame) {
       try {
@@ -703,6 +782,8 @@ public final class LobbyScreen extends ContentScreen {
                 new java.io.OutputStreamWriter(activeSocket.getOutputStream()));
         writer.write("NAME_COLOR:" + myPlayerName + ":" + myColorIndex + "\n");
         writer.flush();
+        ctx.settings().setColorIndex(myColorIndex);
+        ctx.settings().save();
       } catch (java.io.IOException e) {
         System.err.println("Failed to send NAME_COLOR update: " + e.getMessage());
       }
@@ -743,6 +824,9 @@ public final class LobbyScreen extends ContentScreen {
 
   private void startHosting() {
     setMode(Mode.HOSTING);
+    myColorIndex = 1; // host always starts as Red
+    ctx.settings().setColorIndex(myColorIndex);
+    ctx.settings().save();
 
     new Thread(
             () -> {
@@ -852,6 +936,14 @@ public final class LobbyScreen extends ContentScreen {
                   } else if (line.startsWith("PLAYERS:")) {
                     String playersStr = line.substring(8);
                     Platform.runLater(() -> updatePlayerList(playersStr));
+                  } else if (line.startsWith("COLOR:")) {
+                    int assignedColor = Integer.parseInt(line.substring(6));
+                    Platform.runLater(() -> {
+                      myColorIndex = assignedColor;
+                      ctx.settings().setColorIndex(myColorIndex);
+                      ctx.settings().save();
+                      buildUI();
+                    });
                   } else if (line.equals("START")) {
                     final int finalPlayerId = playerId;
                     final Socket finalSocket = socket;
@@ -1005,7 +1097,10 @@ public final class LobbyScreen extends ContentScreen {
                 myPlayerName,
                 "Enter your name",
                 name -> {
-                  myPlayerName = name.isEmpty() ? "Player" : name;
+                  String desired = name.isEmpty() ? "Player" : name;
+                  myPlayerName = resolveUniqueName(desired);
+                  ctx.settings().setPlayerName(myPlayerName);
+                  ctx.settings().save();
                   sendNameColorUpdate();
                   buildUI();
                 }));
@@ -1300,21 +1395,27 @@ public final class LobbyScreen extends ContentScreen {
 
     Font chatFont = ctx.assets().getFont(FontKey.LABEL);
 
-    String username = "Player";
-    String messageBody = msg;
+    String username;
+    String messageBody;
+    Color usernameColor;
 
     int separator = msg.indexOf(":");
 
     if (separator > 0) {
       username = msg.substring(0, separator).trim();
       messageBody = msg.substring(separator + 1).trim();
+      usernameColor =
+          playerChatColors.computeIfAbsent(
+              username, key -> chatPalette[chatRandom.nextInt(chatPalette.length)]);
+    } else {
+      // System message (join/leave, no colon)
+      username = "System";
+      messageBody = msg;
+      usernameColor = Color.GRAY;
     }
 
-    Color usernameColor =
-        playerChatColors.computeIfAbsent(
-            username, key -> chatPalette[chatRandom.nextInt(chatPalette.length)]);
-
-    Label usernameLabel = new Label(username + ": ");
+    boolean hasColon = separator > 0 || username.equals("System");
+    Label usernameLabel = new Label(username + (hasColon ? ": " : ""));
     usernameLabel.setFont(chatFont);
     usernameLabel.setTextFill(usernameColor);
 

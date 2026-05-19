@@ -26,7 +26,7 @@ public class ListenServerIntegrationTest {
 
     // Create a test VehicleState
     VehicleState vehicle =
-        new VehicleState(0, 100.0, 200.0, 10.5, -5.2, 45.0, false, true, PromptType.PICKUP);
+        new VehicleState(0, 100.0, 200.0, 10.5, -5.2, 45.0, false, true, PromptType.PICKUP, 0, 0.0, "Player");
 
     // Create a test ParcelState
     ParcelState parcel = new ParcelState(1, 150.0, 250.0, 5.0, null, 25.5, false, 2);
@@ -36,7 +36,7 @@ public class ListenServerIntegrationTest {
     vehicles.add(vehicle);
     List<ParcelState> parcels = new ArrayList<>();
     parcels.add(parcel);
-    GameState originalState = new GameState(120.0, 0.5, 500.0, vehicles, parcels, null);
+    GameState originalState = new GameState(120.0, 0.5, 500.0, 0, 0, vehicles, parcels, null);
 
     // Serialize to JSON
     String stateJson = Serializer.serializeGameState(originalState);

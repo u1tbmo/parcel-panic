@@ -7,9 +7,10 @@ public class MatchRules {
   public static final int TILE_SIZE = 40;
 
   // Physics - Vehicle
-  public static final double VEHICLE_MAX_SPEED = 450.0;
-  public static final double VEHICLE_ACCELERATION = VEHICLE_MAX_SPEED / (9.0 / 60.0);
-  public static final double VEHICLE_FRICTION = VEHICLE_MAX_SPEED / (4.0 / 60.0);
+  public static final double VEHICLE_MAX_SPEED = 340.0;
+  // Time (in frames @60fps) to reach top speed / to come to a stop.
+  public static final double VEHICLE_ACCELERATION = VEHICLE_MAX_SPEED / (12.0 / 60.0);
+  public static final double VEHICLE_FRICTION = VEHICLE_MAX_SPEED / (5.0 / 60.0);
 
   public static final double VEHICLE_SCALE = 40.0 / 22.0;
 
@@ -23,8 +24,8 @@ public class MatchRules {
   public static final double VEHICLE_H_OFFSET_X = -0.5 * VEHICLE_SCALE;
   public static final double VEHICLE_H_OFFSET_Y = 2.0 * VEHICLE_SCALE;
 
-  public static final double DASH_FORCE = 900.0;
-  public static final double DASH_COOLDOWN_TIME = 0.6;
+  public static final double DASH_FORCE = 620.0;
+  public static final double DASH_COOLDOWN_TIME = 0.75;
 
   // Physics - Items
   public static final double THROW_SPEED = 600.0;
@@ -39,8 +40,11 @@ public class MatchRules {
   public static final double INTERACT_RANGE = 32.0;
 
   // Timers & Lifecycle
-  public static final double MATCH_DURATION = 180.0;
-  public static final double INTERACT_TIME_REQUIRED = 0.6;
+  public static final double MATCH_DURATION = 241.0;
+
+  // Interaction (spam mechanic): each valid tap adds 1/N progress; progress decays over time.
+  public static final int INTERACT_TAPS_REQUIRED = 2;
+  public static final double INTERACT_PROGRESS_DECAY_PER_SECOND = 0.5;
   public static final double PICKUP_COOLDOWN_TIME = 0.5;
   public static final double MAX_PARCEL_TIME = 30.0;
 

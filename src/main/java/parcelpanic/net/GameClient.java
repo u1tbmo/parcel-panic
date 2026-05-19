@@ -8,6 +8,7 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.PlayerIntent;
 
@@ -20,6 +21,7 @@ public class GameClient {
   private volatile GameState latestState;
   private volatile boolean running = false;
   private int playerId = -1;
+  private final ConcurrentLinkedQueue<String> soundQueue = new ConcurrentLinkedQueue<>();
 
   public void connect(String host, int port) throws IOException {
     this.socket = new Socket(host, port);
@@ -61,6 +63,13 @@ public class GameClient {
               new String(Base64.getDecoder().decode(encodedJson), StandardCharsets.UTF_8);
 
           this.latestState = Serializer.deserializeGameState(stateJson);
+        } else if (line.startsWith("SOUND:")) {
+          String soundsStr = line.substring(6);
+          if (!soundsStr.isEmpty()) {
+            for (String s : soundsStr.split(",")) {
+              soundQueue.add(s.trim());
+            }
+          }
         }
       }
     } catch (IOException e) {
@@ -95,6 +104,10 @@ public class GameClient {
 
   public int getPlayerId() {
     return playerId;
+  }
+
+  public String pollSound() {
+    return soundQueue.poll();
   }
 
   public boolean isRunning() {

@@ -12,7 +12,9 @@ public record VehicleState(
     boolean isDashing,
     boolean isAccelerating,
     PromptType prompt,
-    int colorIndex) {
+    int colorIndex,
+    double interactProgress,
+    String playerName) {
   public enum PromptType {
     NONE,
     PICKUP,

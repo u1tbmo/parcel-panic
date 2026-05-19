@@ -5,9 +5,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 import javafx.geometry.Point2D;
 import parcelpanic.logic.entities.ParcelLogic;
 import parcelpanic.logic.entities.VehicleLogic;
+import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.PlayerIntent;
@@ -21,10 +23,13 @@ public class GameSimulation {
   private final Random random = new Random();
 
   private final Map<Integer, Double> interactionGauges = new HashMap<>();
+  private final Map<Integer, Boolean> wasInteracting = new HashMap<>();
 
   private double matchTimer = MatchRules.MATCH_DURATION;
   private double unhappiness = 0.0;
   private double score = 0.0;
+  private int deliveredCount = 0;
+  private int expiredCount = 0;
   private double spawnTimer = 2.0; // Initial delay before first spawn
 
   private final TileMap tileMap;
@@ -32,13 +37,17 @@ public class GameSimulation {
   private final List<Point2D> targetLocations;
   private int parcelIdCounter = 1;
 
-  public GameSimulation(TileMap tileMap) {
+  private final Consumer<AudioKey> playSound;
+  private final List<AudioKey> pendingSounds = new ArrayList<>();
+
+  public GameSimulation(TileMap tileMap, Consumer<AudioKey> playSound) {
     this.tileMap = tileMap;
     this.hubLocations = tileMap.getTilesOfType(TileMap.TileType.HUB);
     this.targetLocations = tileMap.getTilesOfType(TileMap.TileType.TARGET_ZONE);
+    this.playSound = playSound != null ? playSound : (k -> {});
   }
 
-  public void addPlayer(int id, double x, double y) {
+  public void addPlayer(int id, double x, double y, String playerName) {
     double spawnX = 0;
     double spawnY = 0;
 
@@ -50,14 +59,24 @@ public class GameSimulation {
       spawnX = randomHub.getX() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
       spawnY = randomHub.getY() * MatchRules.TILE_SIZE + (MatchRules.TILE_SIZE / 2.0);
     }
-    vehicles.put(id, new VehicleLogic(id, spawnX, spawnY));
+    VehicleLogic vehicle = new VehicleLogic(id, spawnX, spawnY);
+    vehicle.setPlayerName(playerName);
+    vehicles.put(id, vehicle);
     interactionGauges.put(id, 0.0);
+    wasInteracting.put(id, false);
   }
 
   public void setVehicleColor(int id, int colorIndex) {
     VehicleLogic v = vehicles.get(id);
     if (v != null) {
       v.setColorIndex(colorIndex);
+    }
+  }
+
+  public void setVehiclePlayerName(int id, String playerName) {
+    VehicleLogic v = vehicles.get(id);
+    if (v != null) {
+      v.setPlayerName(playerName);
     }
   }
 
@@ -72,11 +91,31 @@ public class GameSimulation {
       // Logic for game over
     }
 
-    // Handle Parcel Spawning
+    // Handle Parcel Spawning - increase stress over time
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
-      spawnParcel();
-      spawnTimer = MatchRules.PARCEL_SPAWN_INTERVAL;
+      // Batch size increases as match progresses (1 at start, up to 3 at end)
+      double progress = 1.0 - (matchTimer / MatchRules.MATCH_DURATION);
+      int batchSize = 1 + (int) (progress * 1.0); // 1 -> 2
+
+      // Spawn interval decreases over time (7.5s -> 5.0s)
+      double currentInterval = MatchRules.PARCEL_SPAWN_INTERVAL - (progress * 2.5);
+
+      int spawned = 0;
+      int maxSpawn = Math.min(batchSize, MatchRules.MAX_PARCELS_ON_SCREEN - parcels.size());
+
+      for (int i = 0; i < maxSpawn; i++) {
+        if (spawnParcelInternal()) {
+          spawned++;
+        }
+      }
+
+      if (spawned > 0) {
+        spawnTimer = Math.max(5.0, currentInterval);
+      } else {
+        // No spawns happened (no hubs/targets), try again soon
+        spawnTimer = 1.0;
+      }
     }
 
     for (PlayerIntent intent : intents) {
@@ -100,6 +139,9 @@ public class GameSimulation {
 
       if (parcel.update(dt)) {
         unhappiness = MatchRules.calculatePenalty(unhappiness);
+        expiredCount++;
+        playSound.accept(AudioKey.PARCEL_EXPIRED);
+        pendingSounds.add(AudioKey.PARCEL_EXPIRED);
         if (parcel.currentState() == ParcelLogic.State.CARRIED) {
           VehicleLogic carrier = vehicles.get(parcel.carrierId());
           if (carrier != null) {
@@ -120,75 +162,114 @@ public class GameSimulation {
       if (parcel.currentState() == ParcelLogic.State.THROWN) {
         CollisionEngine.resolveParcel(parcel, tileMap, oldX, oldY);
         checkCatch(parcel);
+
+        // Parcels can cross certain tiles, but they can't come to rest on them.
+        if (parcel.isStoppedOnGround()) {
+          ensureParcelLandsOnValidTile(parcel);
+        }
       }
     }
 
     return generateSnapshot();
   }
 
-  private void spawnParcel() {
-    if (parcels.size() >= MatchRules.MAX_PARCELS_ON_SCREEN) return;
-    if (hubLocations.isEmpty() || targetLocations.isEmpty()) return;
+  private boolean spawnParcelInternal() {
+    if (parcels.size() >= MatchRules.MAX_PARCELS_ON_SCREEN) return false;
+    if (hubLocations.isEmpty() || targetLocations.isEmpty()) return false;
 
     Point2D hub = hubLocations.get(random.nextInt(hubLocations.size()));
     int targetId = random.nextInt(targetLocations.size());
 
-    // Center the parcel in the 40x40 tile
     double px = hub.getX() * MatchRules.TILE_SIZE + 20;
     double py = hub.getY() * MatchRules.TILE_SIZE + 20;
 
     parcels.add(new ParcelLogic(parcelIdCounter++, targetId, px, py));
+    return true;
+  }
+
+  private void spawnParcel() {
+    spawnParcelInternal();
   }
 
   private void handleInteraction(double dt, VehicleLogic vehicle, PlayerIntent intent) {
-    if (intent.interact()) {
-      // Check for Pickup (Hub or Ground)
-      ParcelLogic nearby = findNearbyParcel(vehicle);
-      if (nearby != null && vehicle.canPickup()) {
-        double progress = interactionGauges.get(vehicle.id()) + dt;
-        if (progress >= MatchRules.INTERACT_TIME_REQUIRED) {
-          nearby.pickup(vehicle.id());
-          vehicle.setHasParcel(true);
-          interactionGauges.put(vehicle.id(), 0.0);
-        } else {
-          interactionGauges.put(vehicle.id(), progress);
-        }
-        return;
-      }
+    boolean pressed = intent.interact();
+    boolean wasPressed = wasInteracting.getOrDefault(vehicle.id(), false);
+    wasInteracting.put(vehicle.id(), pressed);
 
-      // Check for Delivery (At a House/Target Zone)
-      int tx = (int) Math.floor(vehicle.x() / MatchRules.TILE_SIZE);
-      int ty = (int) Math.floor(vehicle.y() / MatchRules.TILE_SIZE);
-
-      if (tx >= 0 && tx < tileMap.getWidth() && ty >= 0 && ty < tileMap.getHeight()) {
-        if (tileMap.getTile(tx, ty) == TileMap.TileType.TARGET_ZONE) {
-          // Identify which target zone this tile represents
-          int currentZoneId = -1;
-          for (int i = 0; i < targetLocations.size(); i++) {
-            Point2D loc = targetLocations.get(i);
-            if ((int) loc.getX() == tx && (int) loc.getY() == ty) {
-              currentZoneId = i;
-              break;
-            }
-          }
-
-          // Check if carried parcel matches this zone
-          for (int i = parcels.size() - 1; i >= 0; i--) {
-            ParcelLogic p = parcels.get(i);
-            if (p.carrierId() != null && p.carrierId() == vehicle.id()) {
-              if (p.targetHouseId() == currentZoneId) {
-                score += MatchRules.calculateDeliveryScore(p.remainingTime());
-                parcels.remove(i);
-                vehicle.setHasParcel(false);
-                break;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      interactionGauges.put(vehicle.id(), 0.0);
+    // Overcooked-style spam: progress decays while you aren't advancing it.
+    double progress = interactionGauges.getOrDefault(vehicle.id(), 0.0);
+    if (progress > 0.0) {
+      progress = Math.max(0.0, progress - (MatchRules.INTERACT_PROGRESS_DECAY_PER_SECOND * dt));
     }
+
+    // Check validity for this frame.
+    ParcelLogic pickupTarget = null;
+    if (vehicle.canPickup()) {
+      pickupTarget = findNearbyParcel(vehicle);
+    }
+
+    int deliveryZoneId = findCurrentTargetZoneId(vehicle);
+    ParcelLogic carried = findCarriedParcel(vehicle.id());
+    boolean deliveryValid =
+        carried != null && deliveryZoneId >= 0 && carried.targetHouseId() == deliveryZoneId;
+
+    boolean anyValid = pickupTarget != null || deliveryValid;
+
+    // Advance only on a new press edge while valid.
+    boolean justPressed = pressed && !wasPressed;
+    if (justPressed && anyValid) {
+      progress = Math.min(1.0, progress + (1.0 / MatchRules.INTERACT_TAPS_REQUIRED));
+      playSound.accept(AudioKey.INTERACT_TAP);
+      pendingSounds.add(AudioKey.INTERACT_TAP);
+    }
+
+    interactionGauges.put(vehicle.id(), progress);
+    vehicle.setInteractProgress(progress);
+
+    if (progress < 1.0) return;
+
+    // Commit action, then reset.
+    if (pickupTarget != null) {
+      pickupTarget.pickup(vehicle.id());
+      vehicle.setHasParcel(true);
+    } else if (deliveryValid) {
+      // Deliver the carried parcel.
+      for (int i = parcels.size() - 1; i >= 0; i--) {
+        ParcelLogic p = parcels.get(i);
+        if (p.carrierId() != null && p.carrierId() == vehicle.id()) {
+          if (p.targetHouseId() == deliveryZoneId) {
+            score += MatchRules.calculateDeliveryScore(p.remainingTime());
+            deliveredCount++;
+            parcels.remove(i);
+            vehicle.setHasParcel(false);
+            break;
+          }
+        }
+      }
+    }
+
+    interactionGauges.put(vehicle.id(), 0.0);
+    vehicle.setInteractProgress(0.0);
+  }
+
+  private int findCurrentTargetZoneId(VehicleLogic vehicle) {
+    int tx = (int) Math.floor(vehicle.x() / MatchRules.TILE_SIZE);
+    int ty = (int) Math.floor(vehicle.y() / MatchRules.TILE_SIZE);
+
+    if (tx < 0 || tx >= tileMap.getWidth() || ty < 0 || ty >= tileMap.getHeight()) {
+      return -1;
+    }
+    if (tileMap.getTile(tx, ty) != TileMap.TileType.TARGET_ZONE) {
+      return -1;
+    }
+
+    for (int i = 0; i < targetLocations.size(); i++) {
+      Point2D loc = targetLocations.get(i);
+      if ((int) loc.getX() == tx && (int) loc.getY() == ty) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   private void updatePrompt(VehicleLogic vehicle) {
@@ -256,6 +337,8 @@ public class GameSimulation {
           p.launch(vehicle.x(), vehicle.y(), vx, vy);
           vehicle.setHasParcel(false);
           vehicle.triggerPickupCooldown();
+          playSound.accept(AudioKey.PARCEL_THROW);
+          pendingSounds.add(AudioKey.PARCEL_THROW);
           break;
         }
       }
@@ -271,6 +354,8 @@ public class GameSimulation {
       if (dist < MatchRules.INTERACT_RANGE) {
         parcel.pickup(vehicle.id());
         vehicle.setHasParcel(true);
+        playSound.accept(AudioKey.PARCEL_CATCH);
+        pendingSounds.add(AudioKey.PARCEL_CATCH);
         return;
       }
     }
@@ -287,10 +372,52 @@ public class GameSimulation {
     return null;
   }
 
+  private void ensureParcelLandsOnValidTile(ParcelLogic parcel) {
+    int tx = (int) Math.floor(parcel.x() / MatchRules.TILE_SIZE);
+    int ty = (int) Math.floor(parcel.y() / MatchRules.TILE_SIZE);
+    if (tx < 0 || tx >= tileMap.getWidth() || ty < 0 || ty >= tileMap.getHeight()) {
+      return;
+    }
+
+    if (tileMap.getTile(tx, ty).canParcelLand) {
+      return;
+    }
+
+    // Try to move the parcel to a neighboring landable tile (4-neighborhood).
+    int[][] dirs = new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (int[] d : dirs) {
+      int nx = tx + d[0];
+      int ny = ty + d[1];
+      if (nx < 0 || nx >= tileMap.getWidth() || ny < 0 || ny >= tileMap.getHeight()) {
+        continue;
+      }
+      if (!tileMap.getTile(nx, ny).canParcelLand) {
+        continue;
+      }
+
+      parcel.setX(nx * MatchRules.TILE_SIZE + MatchRules.TILE_SIZE / 2.0);
+      parcel.setY(ny * MatchRules.TILE_SIZE + MatchRules.TILE_SIZE / 2.0);
+      parcel.land();
+      return;
+    }
+
+    // No nearby safe spot; still force it to stop to avoid jitter.
+    parcel.land();
+  }
+
   public GameState generateSnapshot() {
     List<VehicleState> vStates = vehicles.values().stream().map(VehicleLogic::state).toList();
     List<ParcelState> pStates = parcels.stream().map(ParcelLogic::state).toList();
-    return new GameState(matchTimer, unhappiness, score, vStates, pStates, tileMap);
+    return new GameState(
+        matchTimer, unhappiness, score, deliveredCount, expiredCount, vStates, pStates, tileMap);
+  }
+
+  public List<String> drainSounds() {
+    synchronized (pendingSounds) {
+      List<String> keys = pendingSounds.stream().map(Enum::name).toList();
+      pendingSounds.clear();
+      return keys;
+    }
   }
 
   public double getMatchTimer() {
@@ -300,6 +427,7 @@ public class GameSimulation {
   public void removePlayer(int id) {
     vehicles.remove(id);
     interactionGauges.remove(id);
+    wasInteracting.remove(id);
     for (ParcelLogic p : parcels) {
       if (p.carrierId() != null && p.carrierId() == id) {
         p.drop();

@@ -17,6 +17,9 @@ public final class AudioService {
   /// A queue of sounds to be played
   private final Queue<SoundEvent> soundQueue = new ArrayDeque<>();
 
+  /// Currently playing music track (if any)
+  private MediaPlayer musicPlayer;
+
   /// The master volume
   private double masterVolume = 0.5;
 
@@ -98,6 +101,53 @@ public final class AudioService {
 
   public double getVolume() {
     return masterVolume;
+  }
+
+  /// Play a music track on loop
+  public void playMusic(AudioKey key) {
+    if (muted) return;
+
+    try {
+      if (musicPlayer != null) {
+        musicPlayer.stop();
+      }
+
+      musicPlayer =
+          soundCache.computeIfAbsent(
+              key,
+              k -> {
+                try {
+                  String resourcePath = "/sounds/" + k.getFileName() + ".mp3";
+                  var resource = getClass().getResource(resourcePath);
+                  if (resource == null) {
+                    System.err.println("Music resource not found: " + resourcePath);
+                    return null;
+                  }
+                  Media media = new Media(resource.toExternalForm());
+                  MediaPlayer player = new MediaPlayer(media);
+                  player.setCycleCount(MediaPlayer.INDEFINITE);
+                  return player;
+                } catch (Exception e) {
+                  System.err.println("Failed to load music: " + k.name());
+                  return null;
+                }
+              });
+
+      if (musicPlayer != null) {
+        musicPlayer.seek(Duration.ZERO);
+        musicPlayer.setVolume(masterVolume * 0.7); // Slightly lower than SFX
+        musicPlayer.play();
+      }
+    } catch (Exception e) {
+      System.err.println("Error playing music: " + key.name() + " - " + e.getMessage());
+    }
+  }
+
+  /// Stop music track
+  public void stopMusic() {
+    if (musicPlayer != null) {
+      musicPlayer.stop();
+    }
   }
 
   /// Stop all currently playing sounds

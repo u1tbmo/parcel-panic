@@ -27,6 +27,8 @@ public class Serializer {
     root.addProperty("matchTimer", state.matchTimer());
     root.addProperty("unhappiness", state.unhappiness());
     root.addProperty("score", state.score());
+    root.addProperty("deliveredCount", state.deliveredCount());
+    root.addProperty("expiredCount", state.expiredCount());
 
     // Serialize vehicles
     JsonArray vehiclesArray = new JsonArray();
@@ -63,6 +65,8 @@ public class Serializer {
       double matchTimer = root.get("matchTimer").getAsDouble();
       double unhappiness = root.get("unhappiness").getAsDouble();
       double score = root.get("score").getAsDouble();
+      int deliveredCount = root.has("deliveredCount") ? root.get("deliveredCount").getAsInt() : 0;
+      int expiredCount = root.has("expiredCount") ? root.get("expiredCount").getAsInt() : 0;
 
       // Deserialize vehicles
       List<VehicleState> vehicles = new ArrayList<>();
@@ -83,7 +87,8 @@ public class Serializer {
       }
 
       // TileMap will be set by the client from the local map file
-      return new GameState(matchTimer, unhappiness, score, vehicles, parcels, null);
+      return new GameState(
+          matchTimer, unhappiness, score, deliveredCount, expiredCount, vehicles, parcels, null);
     } catch (Exception e) {
       System.err.println("Error deserializing GameState: " + e.getMessage());
       return null;
@@ -102,6 +107,8 @@ public class Serializer {
     obj.addProperty("isAccelerating", v.isAccelerating());
     obj.addProperty("prompt", v.prompt().name());
     obj.addProperty("colorIndex", v.colorIndex());
+    obj.addProperty("interactProgress", v.interactProgress());
+    obj.addProperty("playerName", v.playerName());
     return obj;
   }
 
@@ -118,8 +125,24 @@ public class Serializer {
     int colorIndex =
         obj.has("colorIndex") ? obj.get("colorIndex").getAsInt() : 1; // default to Red style 1
 
+    double interactProgress =
+        obj.has("interactProgress") ? obj.get("interactProgress").getAsDouble() : 0.0;
+
+    String playerName = obj.has("playerName") ? obj.get("playerName").getAsString() : "Player";
+
     return new VehicleState(
-        id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
+        id,
+        x,
+        y,
+        vx,
+        vy,
+        rotation,
+        isDashing,
+        isAccelerating,
+        prompt,
+        colorIndex,
+        interactProgress,
+        playerName);
   }
 
   private static JsonObject serializeParcelState(ParcelState p) {

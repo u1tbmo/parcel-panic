@@ -16,6 +16,10 @@ public final class GameSettings {
   private final VideoSettings video;
   private final AudioSettings audio;
   private final ControlsSettings controls;
+  private static final String KEY_PLAYER_NAME = "player.name";
+  private static final String KEY_COLOR_INDEX = "player.colorIndex";
+  private String playerName = "Player";
+  private int colorIndex = -1;
 
   public GameSettings() {
     this.video = new VideoSettings();
@@ -35,11 +39,29 @@ public final class GameSettings {
     return controls;
   }
 
+  public String playerName() {
+    return playerName;
+  }
+
+  public void setPlayerName(String name) {
+    this.playerName = name != null && !name.trim().isEmpty() ? name.trim() : "Player";
+  }
+
+  public int colorIndex() {
+    return colorIndex;
+  }
+
+  public void setColorIndex(int index) {
+    this.colorIndex = index;
+  }
+
   /// Load settings from persistent storage
   public void load() {
     video.load();
     audio.load();
     controls.load();
+    this.playerName = prefs.get(KEY_PLAYER_NAME, "Player");
+    this.colorIndex = prefs.getInt(KEY_COLOR_INDEX, -1);
   }
 
   /// Save settings to persistent storage
@@ -47,6 +69,10 @@ public final class GameSettings {
     video.save();
     audio.save();
     controls.save();
+    prefs.put(KEY_PLAYER_NAME, playerName);
+    if (colorIndex >= 0) {
+      prefs.putInt(KEY_COLOR_INDEX, colorIndex);
+    }
   }
 
   public static class AudioSettings {

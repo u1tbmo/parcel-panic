@@ -23,7 +23,8 @@ public class CollisionEngine {
     double leftEdge = cx - hw;
     int leftTileX = (int) Math.floor(leftEdge / MatchRules.TILE_SIZE);
     if (leftTileX < centerTileX) {
-      if (isSolid(leftEdge, oldCy - hh, map) || isSolid(leftEdge, oldCy + hh, map)) {
+      if (isSolidForParcel(leftEdge, oldCy - hh, map)
+          || isSolidForParcel(leftEdge, oldCy + hh, map)) {
         parcel.setX((leftTileX + 1) * MatchRules.TILE_SIZE + hw);
         parcel.bounceX();
       }
@@ -32,7 +33,8 @@ public class CollisionEngine {
     double rightEdge = cx + hw;
     int rightTileX = (int) Math.floor(rightEdge / MatchRules.TILE_SIZE);
     if (rightTileX > centerTileX) {
-      if (isSolid(rightEdge, oldCy - hh, map) || isSolid(rightEdge, oldCy + hh, map)) {
+      if (isSolidForParcel(rightEdge, oldCy - hh, map)
+          || isSolidForParcel(rightEdge, oldCy + hh, map)) {
         parcel.setX(rightTileX * MatchRules.TILE_SIZE - hw);
         parcel.bounceX();
       }
@@ -45,7 +47,7 @@ public class CollisionEngine {
     double topEdge = cy - hh;
     int topTileY = (int) Math.floor(topEdge / MatchRules.TILE_SIZE);
     if (topTileY < centerTileY) {
-      if (isSolid(cx - hw, topEdge, map) || isSolid(cx + hw, topEdge, map)) {
+      if (isSolidForParcel(cx - hw, topEdge, map) || isSolidForParcel(cx + hw, topEdge, map)) {
         parcel.setY((topTileY + 1) * MatchRules.TILE_SIZE + hh);
         parcel.bounceY();
       }
@@ -54,7 +56,8 @@ public class CollisionEngine {
     double bottomEdge = cy + hh;
     int bottomTileY = (int) Math.floor(bottomEdge / MatchRules.TILE_SIZE);
     if (bottomTileY > centerTileY) {
-      if (isSolid(cx - hw, bottomEdge, map) || isSolid(cx + hw, bottomEdge, map)) {
+      if (isSolidForParcel(cx - hw, bottomEdge, map)
+          || isSolidForParcel(cx + hw, bottomEdge, map)) {
         parcel.setY(bottomTileY * MatchRules.TILE_SIZE - hh);
         parcel.bounceY();
       }
@@ -94,7 +97,8 @@ public class CollisionEngine {
     double leftEdge = cx - hw;
     int leftTileX = (int) Math.floor(leftEdge / MatchRules.TILE_SIZE);
     if (leftTileX < centerTileX) {
-      if (isSolid(leftEdge, oldCy - hh + 2, map) || isSolid(leftEdge, oldCy + hh - 2, map)) {
+      if (isSolidForVehicle(leftEdge, oldCy - hh + 2, map)
+          || isSolidForVehicle(leftEdge, oldCy + hh - 2, map)) {
         vehicle.setX((leftTileX + 1) * MatchRules.TILE_SIZE + hw - ox);
         vehicle.stopVelocityX();
       }
@@ -103,7 +107,8 @@ public class CollisionEngine {
     double rightEdge = cx + hw;
     int rightTileX = (int) Math.floor(rightEdge / MatchRules.TILE_SIZE);
     if (rightTileX > centerTileX) {
-      if (isSolid(rightEdge, oldCy - hh + 2, map) || isSolid(rightEdge, oldCy + hh - 2, map)) {
+      if (isSolidForVehicle(rightEdge, oldCy - hh + 2, map)
+          || isSolidForVehicle(rightEdge, oldCy + hh - 2, map)) {
         vehicle.setX(rightTileX * MatchRules.TILE_SIZE - hw - ox);
         vehicle.stopVelocityX();
       }
@@ -117,7 +122,8 @@ public class CollisionEngine {
     double topEdge = cy - hh;
     int topTileY = (int) Math.floor(topEdge / MatchRules.TILE_SIZE);
     if (topTileY < centerTileY) {
-      if (isSolid(cx - hw + 2, topEdge, map) || isSolid(cx + hw - 2, topEdge, map)) {
+      if (isSolidForVehicle(cx - hw + 2, topEdge, map)
+          || isSolidForVehicle(cx + hw - 2, topEdge, map)) {
         vehicle.setY((topTileY + 1) * MatchRules.TILE_SIZE + hh - oy);
         vehicle.stopVelocityY();
       }
@@ -126,14 +132,15 @@ public class CollisionEngine {
     double bottomEdge = cy + hh;
     int bottomTileY = (int) Math.floor(bottomEdge / MatchRules.TILE_SIZE);
     if (bottomTileY > centerTileY) {
-      if (isSolid(cx - hw + 2, bottomEdge, map) || isSolid(cx + hw - 2, bottomEdge, map)) {
+      if (isSolidForVehicle(cx - hw + 2, bottomEdge, map)
+          || isSolidForVehicle(cx + hw - 2, bottomEdge, map)) {
         vehicle.setY(bottomTileY * MatchRules.TILE_SIZE - hh - oy);
         vehicle.stopVelocityY();
       }
     }
   }
 
-  private static boolean isSolid(double px, double py, TileMap map) {
+  private static boolean isSolidForVehicle(double px, double py, TileMap map) {
     int tx = (int) Math.floor(px / MatchRules.TILE_SIZE);
     int ty = (int) Math.floor(py / MatchRules.TILE_SIZE);
 
@@ -141,6 +148,17 @@ public class CollisionEngine {
       return true;
     }
 
-    return map.getTile(tx, ty).isSolid;
+    return map.getTile(tx, ty).blocksVehicles;
+  }
+
+  private static boolean isSolidForParcel(double px, double py, TileMap map) {
+    int tx = (int) Math.floor(px / MatchRules.TILE_SIZE);
+    int ty = (int) Math.floor(py / MatchRules.TILE_SIZE);
+
+    if (tx < 0 || tx >= map.getWidth() || ty < 0 || ty >= map.getHeight()) {
+      return true;
+    }
+
+    return map.getTile(tx, ty).blocksParcels;
   }
 }

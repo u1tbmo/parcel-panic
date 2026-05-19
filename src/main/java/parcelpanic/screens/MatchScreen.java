@@ -2,6 +2,7 @@ package parcelpanic.screens;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -9,9 +10,12 @@ import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -21,6 +25,7 @@ import parcelpanic.input.InputAction;
 import parcelpanic.input.LocalPlayerController;
 import parcelpanic.logic.GameSimulation;
 import parcelpanic.logic.MatchRules;
+import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.AssetKeys.ImageKey;
@@ -30,9 +35,11 @@ import parcelpanic.screen.ContentScreen;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.ParcelState;
 import parcelpanic.shared.PlayerIntent;
+import parcelpanic.shared.VehicleState;
 import parcelpanic.util.SmoothedValue;
 import parcelpanic.video.VideoManager;
 import parcelpanic.view.GameRenderer;
+import parcelpanic.view.SlidingCenterText;
 import parcelpanic.world.MapLoader;
 import parcelpanic.world.TileMap;
 
@@ -51,11 +58,12 @@ public final class MatchScreen extends ContentScreen {
     final SmoothedValue carrierAnim;
     boolean isExiting = false;
     boolean hasCarrier = false;
+    boolean wasInPulseZone = false;
 
     OrderCardUI(int parcelId, VBox card) {
       this.parcelId = parcelId;
       this.card = card;
-      this.yOffset = new SmoothedValue(100.0, 0.2); // Start off-screen
+      this.yOffset = new SmoothedValue(-100.0, 0.2); // Start off-screen (top)
       this.carrierAnim = new SmoothedValue(0.0, 0.3); // Animation for expanding carrier info
     }
   }
@@ -66,6 +74,19 @@ public final class MatchScreen extends ContentScreen {
   private TileMap tileMap;
   private GameRenderer gameRenderer;
   private Canvas gameCanvas;
+
+  private SlidingCenterText countdownText;
+  private boolean preGameCountdown = true;
+  private int countdownStep = 3;
+  private double countdownTimer = 0.0;
+
+  private SlidingCenterText endText;
+  private boolean ending = false;
+  private boolean endWasFailure = false;
+
+  private SlidingCenterText lastChanceText;
+  private boolean lastChanceShown = false;
+  private GameState endState;
 
   private GameSimulation simulation;
   private LocalPlayerController inputController;
@@ -99,15 +120,21 @@ public final class MatchScreen extends ContentScreen {
     }
 
     this.gameRenderer = new GameRenderer(ctx.assets(), ctx.settings().controls());
-    this.simulation = new GameSimulation(tileMap);
+    this.simulation = new GameSimulation(tileMap, ctx.audio()::playSound);
     this.inputController = new LocalPlayerController();
 
-    simulation.addPlayer(0, 0, 0);
+    String playerName = ctx.settings().playerName();
+    simulation.addPlayer(0, 0, 0, playerName);
     if (gameClient != null) {
-      simulation.addPlayer(1, 0, 0);
+      simulation.addPlayer(1, 0, 0, "Player 2");
     }
 
     this.localState = simulation.generateSnapshot();
+
+    // Reset countdown state on screen creation.
+    this.preGameCountdown = true;
+    this.countdownStep = 3;
+    this.countdownTimer = 0.0;
   }
 
   @Override
@@ -124,6 +151,34 @@ public final class MatchScreen extends ContentScreen {
     gameLayer.getChildren().addAll(gameCanvas, rootPane);
     gameLayer.setAlignment(Pos.CENTER);
 
+    // Countdown banner on top of the whole screen.
+    countdownText = new SlidingCenterText(ctx.assets().getFont(FontKey.DISPLAY), Color.WHITE);
+    countdownText.setOffscreenX(VideoManager.LOGICAL_WIDTH * 0.65);
+    // Enter + hold + exit ~= 1 second per number.
+    countdownText.setTimings(0.2, 0.6, 0.2);
+    countdownText.setSmoothing(0.45);
+    gameLayer.getChildren().add(countdownText);
+
+    // End banner on top of the whole screen.
+    endText = new SlidingCenterText(ctx.assets().getFont(FontKey.DISPLAY), Color.WHITE);
+    endText.setOffscreenX(VideoManager.LOGICAL_WIDTH * 0.65);
+    endText.setTimings(0.2, 1.0, 0.2);
+    endText.setSmoothing(0.45);
+    gameLayer.getChildren().add(endText);
+
+    // Last chance warning banner.
+    lastChanceText = new SlidingCenterText(ctx.assets().getFont(FontKey.DISPLAY), Color.web("#ffcc00"));
+    lastChanceText.setOffscreenX(VideoManager.LOGICAL_WIDTH * 0.65);
+    lastChanceText.setTimings(0.3, 1.5, 0.3);
+    lastChanceText.setSmoothing(0.45);
+    gameLayer.getChildren().add(lastChanceText);
+    lastChanceShown = false;
+
+    // Kick off the first banner immediately.
+    countdownText.play(String.valueOf(countdownStep));
+    ctx.audio().playSound(AudioKey.COUNTDOWN_TICK);
+    countdownStep--;
+
     return gameLayer;
   }
 
@@ -136,32 +191,65 @@ public final class MatchScreen extends ContentScreen {
   }
 
   private HBox createTopHud() {
-    Font font = ctx.assets().getFont(FontKey.TITLE);
+    orderCardsBox = new HBox(12);
+    orderCardsBox.setAlignment(Pos.TOP_CENTER);
+    orderCardsBox.setFillHeight(false);
+    orderCardsBox.setPadding(new Insets(0, 0, 0, 0));
 
-    timerLabel = UiFactory.createLabel("Time: 180", font, textColor);
-    moneyLabel = UiFactory.createLabel("$0", font, textColor);
-
-    HBox topHud = new HBox(80, timerLabel, moneyLabel);
-    topHud.setAlignment(Pos.TOP_CENTER);
-    topHud.setPadding(new Insets(16, 0, 0, 0));
-
-    return topHud;
+    return orderCardsBox;
   }
 
-  private VBox createBottomContainer() {
-    orderCardsBox = new HBox(12);
-    orderCardsBox.setAlignment(Pos.BOTTOM_CENTER);
-    orderCardsBox.setFillHeight(false);
-    orderCardsBox.setPadding(new Insets(0, 0, -10, 0));
+  private HBox createBottomContainer() {
+    Font font = ctx.assets().getFont(FontKey.TITLE);
 
-    VBox container = new VBox(15, orderCardsBox);
-    container.setAlignment(Pos.BOTTOM_CENTER);
-    container.setPadding(new Insets(0, 0, 0, 0));
-    return container;
+    DropShadow shadow = new DropShadow(4.0, Color.rgb(0, 0, 0, 0.6));
+
+    moneyLabel = UiFactory.createLabel("$0", font, textColor);
+    moneyLabel.setPadding(new Insets(0, 0, 0, 20));
+    moneyLabel.setEffect(shadow);
+    timerLabel = UiFactory.createLabel("Time: 180", font, textColor);
+    timerLabel.setPadding(new Insets(0, 20, 0, 0));
+    timerLabel.setEffect(shadow);
+
+    Region spacer = new Region();
+
+    HBox bottomHud = new HBox(moneyLabel, spacer, timerLabel);
+    bottomHud.setAlignment(Pos.BOTTOM_CENTER);
+    bottomHud.setPadding(new Insets(0, 0, 16, 0));
+    bottomHud.setPrefHeight(50);
+
+    HBox.setHgrow(spacer, Priority.ALWAYS);
+
+    return bottomHud;
   }
 
   @Override
   public void fixedUpdate(double dt) {
+    if (countdownText != null) {
+      countdownText.fixedUpdate(dt);
+    }
+
+    if (endText != null) {
+      endText.fixedUpdate(dt);
+    }
+
+    if (lastChanceText != null) {
+      lastChanceText.fixedUpdate(dt);
+    }
+
+    if (ending) {
+      // Let the end banner play, then switch.
+      if (endText == null || !endText.isPlaying()) {
+        ctx.navigator().requestSwitch(new ResultsScreen(endWasFailure, endState));
+      }
+      return;
+    }
+
+    if (preGameCountdown) {
+      tickCountdown(dt);
+      return;
+    }
+
     int playerId = 0;
 
     if (gameClient != null) {
@@ -169,9 +257,10 @@ public final class MatchScreen extends ContentScreen {
         // If the client stops running, check if it was due to a normal game end
         GameState latest = gameClient.getLatestState();
         if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 100)) {
-          ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
+          beginEnding(latest);
         } else {
           kicked = true;
+          ctx.audio().stopMusic();
           Platform.runLater(
               () -> {
                 ctx.navigator().push(new KickOverlay("Host Exited"));
@@ -191,7 +280,7 @@ public final class MatchScreen extends ContentScreen {
         // Also check if state dictates game end while running
         GameState latest = gameClient.getLatestState();
         if (latest != null && (latest.matchTimer() <= 0 || latest.unhappiness() >= 100.0)) {
-          ctx.navigator().requestSwitch(new ResultsScreen((int) latest.score()));
+          beginEnding(latest);
         }
       }
       return;
@@ -200,7 +289,7 @@ public final class MatchScreen extends ContentScreen {
     localState = simulation.update(dt, List.of(intent));
 
     if (localState.matchTimer() <= 0 || localState.unhappiness() >= 100.0) {
-      ctx.navigator().requestSwitch(new ResultsScreen((int) localState.score()));
+      beginEnding(localState);
     }
   }
 
@@ -215,6 +304,83 @@ public final class MatchScreen extends ContentScreen {
       gc.clearRect(0, 0, gameCanvas.getWidth(), gameCanvas.getHeight());
       gameRenderer.render(gc, state, alpha);
     }
+
+    // Play server-broadcasted sounds in multiplayer
+    if (gameClient != null) {
+      String soundName;
+      while ((soundName = gameClient.pollSound()) != null) {
+        try {
+          AudioKey key = AudioKey.valueOf(soundName);
+          ctx.audio().playSound(key);
+        } catch (IllegalArgumentException e) {
+          System.err.println("Unknown sound: " + soundName);
+        }
+      }
+    }
+
+    if (countdownText != null) {
+      countdownText.render(alpha);
+    }
+
+    if (endText != null) {
+      endText.render(alpha);
+    }
+
+    if (lastChanceText != null) {
+      lastChanceText.render(alpha);
+    }
+  }
+
+  private void beginEnding(GameState state) {
+    if (ending) return;
+
+    this.ending = true;
+    this.endState = state;
+    this.endWasFailure = state.unhappiness() >= 100.0;
+
+    ctx.audio().stopMusic();
+
+    if (endText != null) {
+      endText.play(endWasFailure ? "You failed" : "Time's up");
+    }
+  }
+
+  private void tickCountdown(double dt) {
+    if (countdownText == null) {
+      preGameCountdown = false;
+      return;
+    }
+
+    // If a banner is currently sliding/holding, wait for it to finish.
+    if (countdownText.isPlaying()) {
+      return;
+    }
+
+    // Small gap between banners.
+    countdownTimer -= dt;
+    if (countdownTimer > 0.0) {
+      return;
+    }
+
+    if (countdownStep > 0) {
+      countdownText.play(String.valueOf(countdownStep));
+      ctx.audio().playSound(AudioKey.COUNTDOWN_TICK);
+      countdownStep--;
+      countdownTimer = 0.05;
+      return;
+    }
+
+    // Final banner.
+    countdownText.play("Go!");
+    ctx.audio().playSound(AudioKey.COUNTDOWN_TICK);
+    countdownStep = -1;
+    countdownTimer = 0.05;
+
+    // Start background music on loop
+    ctx.audio().playMusic(AudioKey.BACKGROUND_MUSIC);
+
+    // Allow the game to start as soon as "Go!" begins.
+    preGameCountdown = false;
   }
 
   private GameState getRenderableState() {
@@ -230,6 +396,8 @@ public final class MatchScreen extends ContentScreen {
             state.matchTimer(),
             state.unhappiness(),
             state.score(),
+            state.deliveredCount(),
+            state.expiredCount(),
             state.vehicles(),
             state.parcels(),
             tileMap);
@@ -252,6 +420,12 @@ public final class MatchScreen extends ContentScreen {
       int remainingSeconds = seconds % 60;
 
       timerLabel.setText(String.format("Time: %02d:%02d", minutes, remainingSeconds));
+
+      if (seconds < 30) {
+        timerLabel.setTextFill(Color.RED);
+      } else {
+        timerLabel.setTextFill(textColor);
+      }
     }
 
     if (moneyLabel != null) {
@@ -260,6 +434,11 @@ public final class MatchScreen extends ContentScreen {
 
     if (orderCardsBox != null) {
       updateOrderCards(state, alpha);
+    }
+
+    if (lastChanceText != null && !lastChanceShown && state.unhappiness() >= MatchRules.MAX_UNHAPPINESS - MatchRules.PENALTY_PER_EXPIRATION) {
+      lastChanceShown = true;
+      lastChanceText.play("Last chance!");
     }
   }
 
@@ -289,7 +468,7 @@ public final class MatchScreen extends ContentScreen {
         OrderCardUI newUi = new OrderCardUI(parcel.id(), newCard);
         updateOrderCard(newUi, parcel, state);
         activeCards.add(newUi);
-        orderCardsBox.getChildren().add(newCard);
+        orderCardsBox.getChildren().add(0, newCard);
       }
     }
 
@@ -297,7 +476,7 @@ public final class MatchScreen extends ContentScreen {
       OrderCardUI ui = activeCards.get(i);
 
       // Update target based on state
-      ui.yOffset.update(ui.isExiting ? 100.0 : 0.0);
+      ui.yOffset.update(ui.isExiting ? -100.0 : 0.0);
       ui.carrierAnim.update(ui.hasCarrier ? 1.0 : 0.0);
 
       double currentY = ui.yOffset.get(alpha);
@@ -323,7 +502,7 @@ public final class MatchScreen extends ContentScreen {
         }
       }
 
-      if (ui.isExiting && ui.yOffset.getCurrent() >= 99.0) {
+      if (ui.isExiting && ui.yOffset.getCurrent() <= -99.0) {
         orderCardsBox.getChildren().remove(ui.card);
         activeCards.remove(i);
       }
@@ -331,43 +510,43 @@ public final class MatchScreen extends ContentScreen {
   }
 
   private VBox createEmptyOrderCard() {
-    VBox card = new VBox(8);
+    VBox card = new VBox(4);
     card.setAlignment(Pos.TOP_CENTER);
-    card.setPadding(new Insets(12, 10, 16, 10));
-    card.setPrefWidth(200);
-    card.setMinHeight(40);
+    card.setPadding(new Insets(4, 8, 8, 8));
+    card.setPrefWidth(140);
+    card.setMinHeight(32);
 
     // Progress bar container
     StackPane progressContainer = new StackPane();
     progressContainer.setAlignment(Pos.CENTER_LEFT);
-    progressContainer.setPrefSize(180, 20);
+    progressContainer.setPrefSize(124, 12);
     progressContainer.setStyle("-fx-background-color: #ddd;");
 
-    Rectangle progressBar = new Rectangle(180, 20);
+    Rectangle progressBar = new Rectangle(124, 12);
     progressBar.setFill(Color.web(ColorKey.SUCCESS.getHex()));
     progressBar.setId("progressBar");
 
     progressContainer.getChildren().add(progressBar);
 
     ImageView parcelIcon = new ImageView();
-    parcelIcon.setFitWidth(32);
-    parcelIcon.setFitHeight(32);
+    parcelIcon.setFitWidth(20);
+    parcelIcon.setFitHeight(20);
     parcelIcon.setPreserveRatio(true);
     parcelIcon.setId("parcelIcon");
 
-    Font titleFont = ctx.assets().getFont(FontKey.LABEL);
+    Font titleFont = ctx.assets().getFont(FontKey.BODY);
     Label targetLabel =
         UiFactory.createLabel("House 0", titleFont, Color.web(ColorKey.TEXT.getHex()));
     targetLabel.setId("targetLabel");
 
-    HBox contentBox = new HBox(8, parcelIcon, targetLabel);
+    HBox contentBox = new HBox(4, parcelIcon, targetLabel);
     contentBox.setAlignment(Pos.CENTER);
     contentBox.setId("contentBox");
 
     // Carrier info box (hidden by default)
     ImageView carrierIcon = new ImageView();
-    carrierIcon.setFitWidth(22);
-    carrierIcon.setFitHeight(22);
+    carrierIcon.setFitWidth(14);
+    carrierIcon.setFitHeight(14);
     carrierIcon.setPreserveRatio(true);
     carrierIcon.setViewport(new javafx.geometry.Rectangle2D(0, 0, 22, 22));
     carrierIcon.setId("carrierIcon");
@@ -420,7 +599,8 @@ public final class MatchScreen extends ContentScreen {
       }
 
       if (carrier != null) {
-        carrierLabel.setText("Player " + (carrier.id() + 1));
+        carrierLabel.setText(
+            carrier.playerName() != null ? carrier.playerName() : "Player " + (carrier.id() + 1));
         carrierIcon.setImage(
             ctx.assets()
                 .getImage(GameRenderer.getImageKeyForVehicle(carrier.id(), carrier.colorIndex())));
@@ -436,7 +616,7 @@ public final class MatchScreen extends ContentScreen {
     double remaining = Math.max(0, parcel.remainingTime());
     double percentage = remaining / maxTime;
 
-    progressBar.setWidth(180 * percentage);
+    progressBar.setWidth(124 * percentage);
 
     if (percentage > 0.5) {
       progressBar.setFill(Color.web(ColorKey.SUCCESS.getHex()));
@@ -449,6 +629,15 @@ public final class MatchScreen extends ContentScreen {
     if (percentage <= 0.25) {
       double time = System.currentTimeMillis() / 1000.0;
       double pulse = (Math.sin(time * 10) + 1) / 2.0;
+      boolean pulseOn = pulse > 0.5;
+
+      // Play warning sounds on pulse transitions
+      if (pulseOn && !ui.wasInPulseZone) {
+        ctx.audio().playSound(AudioKey.PARCEL_WARNING_ON);
+      } else if (!pulseOn && ui.wasInPulseZone) {
+        ctx.audio().playSound(AudioKey.PARCEL_WARNING_OFF);
+      }
+      ui.wasInPulseZone = pulseOn;
 
       // Interpolate background between off-white #FFF9E6 and light red #FFD0D0
       int r = 255;
@@ -462,6 +651,7 @@ public final class MatchScreen extends ContentScreen {
               + ";"
               + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 10, 0, 0, -2);");
     } else {
+      ui.wasInPulseZone = false;
       card.setStyle(
           "-fx-background-color: #FFF9E6;"
               + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 10, 0, 0, -2);");
@@ -477,6 +667,7 @@ public final class MatchScreen extends ContentScreen {
 
   @Override
   protected void onBeforeExit() {
+    ctx.audio().stopMusic();
     if (gameClient != null) {
       gameClient.disconnect();
     }

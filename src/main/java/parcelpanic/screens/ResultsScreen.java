@@ -13,23 +13,33 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
 import parcelpanic.input.InputHintProvider;
+import parcelpanic.media.AssetKeys.AudioKey;
 import parcelpanic.media.AssetKeys.ColorKey;
 import parcelpanic.media.AssetKeys.FontKey;
 import parcelpanic.media.AssetKeys.ImageKey; 
 import parcelpanic.media.UiFactory;
 import parcelpanic.screen.ContentScreen;
+import parcelpanic.shared.GameState;
 import parcelpanic.video.VideoManager;
 
 public final class ResultsScreen extends ContentScreen {
-  private final int score;
-  
   private StackPane rootContainer;
+  private final boolean failed;
+  private final int cashEarned;
+  private final int deliveredCount;
+  private final int expiredCount;
+  private final int unhappiness;
   private BorderPane rootPane;
 
   private Color textColor;
+  private Color surfaceBlack;
 
-  public ResultsScreen(int score) {
-    this.score = score;
+  public ResultsScreen(boolean failed, GameState state) {
+    this.failed = failed;
+    this.cashEarned = state == null ? 0 : (int) state.score();
+    this.deliveredCount = state == null ? 0 : state.deliveredCount();
+    this.expiredCount = state == null ? 0 : state.expiredCount();
+    this.unhappiness = state == null ? 0 : (int) state.unhappiness();
   }
 
   @Override
@@ -40,6 +50,8 @@ public final class ResultsScreen extends ContentScreen {
   @Override
   protected void onBeforeBuild() {
     this.textColor = ctx.assets().getColor(ColorKey.TEXT_LIGHT);
+    this.surfaceBlack = ctx.assets().getColor(ColorKey.SURFACE_BLACK);
+    ctx.audio().playMusic(AudioKey.RESULTS_MUSIC);
   }
 
   @Override
@@ -81,7 +93,7 @@ public final class ResultsScreen extends ContentScreen {
 
   private VBox createTopContainer() {
     Font font = ctx.assets().getFont(FontKey.HEADLINE);
-    Label title = UiFactory.createTitle("", font, textColor);
+    Label title = UiFactory.createTitle(failed ? "FAILED" : "RESULTS", font, textColor);
     VBox container = new VBox(title);
     container.setAlignment(Pos.TOP_CENTER);
     container.setPadding(new Insets(80, 0, 0, 0));
@@ -89,12 +101,18 @@ public final class ResultsScreen extends ContentScreen {
   }
 
   private VBox createCenterContainer() {
-    Font scoreFont = ctx.assets().getFont(FontKey.DISPLAY);
-    Label scoreLabel = UiFactory.createLabel("Score: " + score, scoreFont, textColor);
+    Font moneyFont = ctx.assets().getFont(FontKey.DISPLAY);
+    Label money = UiFactory.createLabel("Cash earned: $" + cashEarned, moneyFont, textColor);
+
+    Font statFont = ctx.assets().getFont(FontKey.TITLE);
+    Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
+    Label delivered = UiFactory.createLabel("Delivered: " + deliveredCount, statFont, hintColor);
+    Label expired = UiFactory.createLabel("Expired: " + expiredCount, statFont, hintColor);
+    Label unhappy = UiFactory.createLabel("Unhappiness: " + unhappiness + "%", statFont, hintColor);
 
     VBox container = new VBox(30);
     container.setAlignment(Pos.CENTER);
-    container.getChildren().add(scoreLabel);
+    container.getChildren().addAll(money, delivered, expired, unhappy);
     return container;
   }
 
@@ -128,6 +146,7 @@ public final class ResultsScreen extends ContentScreen {
   @Override
   public void onKeyPressed(InputAction action) {
     if (action == InputAction.CONFIRM) {
+      ctx.audio().stopMusic();
       ctx.navigator().requestSwitch(new MenuScreen());
     }
   }

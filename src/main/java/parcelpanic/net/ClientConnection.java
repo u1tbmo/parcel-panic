@@ -66,11 +66,23 @@ public class ClientConnection implements Runnable {
         } else if (line.startsWith("NAME_COLOR:")) {
           String[] parts = line.split(":", 3);
           if (parts.length >= 3) {
-            this.customName = parts[1];
+            String desiredName = parts[1];
+            int desiredColorIndex;
             try {
-              this.carColorIndex = Integer.parseInt(parts[2]);
-            } catch (NumberFormatException ignored) {
+              desiredColorIndex = Integer.parseInt(parts[2]);
+            } catch (NumberFormatException e) {
+              desiredColorIndex = 1;
             }
+
+            this.customName = server.resolveUniqueName(desiredName, clientId);
+            this.carColorIndex = server.resolveUniqueColor(desiredColorIndex, clientId);
+
+            if (this.carColorIndex != desiredColorIndex) {
+              sendRawMessage("COLOR:" + this.carColorIndex);
+            }
+
+            server.updatePlayerName(clientId, getCustomName());
+            server.setVehicleColor(clientId, carColorIndex);
 
             if (!joinAnnounced) {
               String joinMsg = getCustomName() + (clientId == 0 ? " (Host)" : "") + " joined";

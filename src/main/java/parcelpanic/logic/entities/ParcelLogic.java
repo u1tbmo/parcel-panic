@@ -76,6 +76,12 @@ public class ParcelLogic {
     return justExpired;
   }
 
+  public boolean isStoppedOnGround() {
+    return currentState == State.THROWN
+        && z == 0
+        && Math.hypot(vx, vy) < MatchRules.PARCEL_MIN_SPEED;
+  }
+
   public void launch(double startX, double startY, double launchVx, double launchVy) {
     this.x = startX;
     this.y = startY;
