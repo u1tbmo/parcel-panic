@@ -47,6 +47,10 @@ public final class VideoManager {
     // Use a fixed logical size for the canvas
     setPaneSize(canvas, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
+    javafx.scene.shape.Rectangle clip =
+        new javafx.scene.shape.Rectangle(LOGICAL_WIDTH, LOGICAL_HEIGHT);
+    canvas.setClip(clip);
+
     // Wrap canvas in a container for centering when scaled
     this.canvasContainer = new StackPane(canvas);
     this.canvasContainer.setPickOnBounds(false); // Let clicks pass through if empty
@@ -72,8 +76,13 @@ public final class VideoManager {
     setRegionSize(background, width, height);
 
     // Keep the existing scene/root and resize the stage.
-    stage.setWidth(width);
-    stage.setHeight(height);
+    if (stage.isShowing()) {
+      stage.setWidth(stage.getWidth() - scene.getWidth() + width);
+      stage.setHeight(stage.getHeight() - scene.getHeight() + height);
+    } else {
+      stage.setWidth(width);
+      stage.setHeight(height);
+    }
 
     if (currentDisplayMode == DisplayMode.WINDOWED) {
       stage.centerOnScreen();
@@ -190,8 +199,13 @@ public final class VideoManager {
   private void restoreWindowedBounds(int targetWidth, int targetHeight) {
     stage.setMaximized(false);
     stage.setResizable(false);
-    stage.setWidth(targetWidth);
-    stage.setHeight(targetHeight);
+    if (stage.isShowing()) {
+      stage.setWidth(stage.getWidth() - scene.getWidth() + targetWidth);
+      stage.setHeight(stage.getHeight() - scene.getHeight() + targetHeight);
+    } else {
+      stage.setWidth(targetWidth);
+      stage.setHeight(targetHeight);
+    }
     stage.centerOnScreen();
     if (stage.isShowing()) {
       stage.hide();
