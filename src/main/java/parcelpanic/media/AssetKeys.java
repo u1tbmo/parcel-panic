@@ -78,7 +78,8 @@ public final class AssetKeys {
   /// Enum of Audio Effects
   public enum AudioKey {
     CLICK("sfx/click_001"),
-    MOVE_SELECTION("sfx/bong_001");
+    MOVE_SELECTION("sfx/bong_001"),
+    ERROR("sfx/error_001");
 
     private final String fileName;
 

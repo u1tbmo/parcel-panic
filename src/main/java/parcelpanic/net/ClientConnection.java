@@ -28,6 +28,8 @@ public class ClientConnection implements Runnable {
   private String customName = null;
   private int carColorIndex = 1; // Default to Red, Style 1
 
+  private boolean joinAnnounced = false;
+
   public ClientConnection(Socket socket, GameServer server, int clientId) {
     this.socket = socket;
     this.server = server;
@@ -47,13 +49,6 @@ public class ClientConnection implements Runnable {
       writer.write("WELCOME:" + (clientId + 1) + "\n");
       writer.flush();
 
-      // Broadcast join announcement
-      String joinMsg =
-          ">>> Player "
-              + (clientId + 1)
-              + (clientId == 0 ? " (Host)" : "")
-              + " has joined the lobby!";
-      server.broadcastChatMessage(joinMsg);
       server.broadcastPlayerList();
 
       // Main client loop: receive intents and send state
@@ -76,6 +71,13 @@ public class ClientConnection implements Runnable {
               this.carColorIndex = Integer.parseInt(parts[2]);
             } catch (NumberFormatException ignored) {
             }
+
+            if (!joinAnnounced) {
+              String joinMsg = getCustomName() + (clientId == 0 ? " (Host)" : "") + " joined";
+              server.broadcastChatMessage(joinMsg);
+              joinAnnounced = true;
+            }
+
             server.broadcastPlayerList();
           }
         } else if (line.startsWith("CHAT:")) {
@@ -182,7 +184,7 @@ public class ClientConnection implements Runnable {
 
     System.out.println("[Server] Client " + clientId + " disconnected");
     if (server.isRunning()) {
-      server.broadcastChatMessage(">>> " + getCustomName() + " has left the lobby.");
+      server.broadcastChatMessage(getCustomName() + " left.");
     }
     server.clientDisconnected(clientId);
   }

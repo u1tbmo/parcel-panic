@@ -83,4 +83,43 @@ public final class UiFactory {
     pane.setPrefSize(width, height);
     return pane;
   }
+
+  /// Creates a standardized input TextField.
+  public static javafx.scene.control.TextField createTextField(
+      String initialText, String promptText, Font font, Runnable onEnter, Runnable onEscape) {
+    javafx.scene.control.TextField field = new javafx.scene.control.TextField(initialText);
+    if (promptText != null) {
+      field.setPromptText(promptText);
+    }
+    field.setFont(font);
+
+    field.setStyle(
+        "-fx-font-family: '"
+            + font.getFamily()
+            + "';"
+            + "-fx-font-size: "
+            + font.getSize()
+            + "px;"
+            + "-fx-background-color: rgba(0, 0, 0, 0.5);"
+            + "-fx-text-fill: white;"
+            + "-fx-prompt-text-fill: #888888;"
+            + "-fx-border-color: rgba(255, 255, 255, 0.2);"
+            + "-fx-border-width: 1px;"
+            + "-fx-border-radius: 6px;"
+            + "-fx-background-radius: 6px;"
+            + "-fx-padding: 8px 12px;");
+
+    field.setOnKeyPressed(
+        event -> {
+          if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+            event.consume();
+            if (onEnter != null) onEnter.run();
+          } else if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+            event.consume();
+            if (onEscape != null) onEscape.run();
+          }
+        });
+
+    return field;
+  }
 }

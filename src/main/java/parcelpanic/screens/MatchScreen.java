@@ -18,7 +18,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import parcelpanic.input.InputAction;
-import parcelpanic.input.InputHintProvider;
 import parcelpanic.input.LocalPlayerController;
 import parcelpanic.logic.GameSimulation;
 import parcelpanic.logic.MatchRules;
@@ -150,18 +149,6 @@ public final class MatchScreen extends ContentScreen {
   }
 
   private VBox createBottomContainer() {
-    Font hintFont = ctx.assets().getFont(FontKey.LABEL);
-    Font iconFont = ctx.assets().getFont(FontKey.HINT);
-    Color hintColor = ctx.assets().getColor(ColorKey.TEXT_HINT);
-
-    Node pauseHint =
-        UiFactory.createHint(
-            InputHintProvider.getIconForAction(InputAction.PAUSE, ctx.settings().controls()),
-            "Pause",
-            iconFont,
-            hintFont,
-            hintColor);
-
     orderCardsBox = new HBox(12);
     orderCardsBox.setAlignment(Pos.BOTTOM_CENTER);
     orderCardsBox.setFillHeight(false);
@@ -431,10 +418,12 @@ public final class MatchScreen extends ContentScreen {
           }
         }
       }
-      
+
       if (carrier != null) {
         carrierLabel.setText("Player " + (carrier.id() + 1));
-        carrierIcon.setImage(ctx.assets().getImage(GameRenderer.getImageKeyForVehicle(carrier.id(), carrier.colorIndex())));
+        carrierIcon.setImage(
+            ctx.assets()
+                .getImage(GameRenderer.getImageKeyForVehicle(carrier.id(), carrier.colorIndex())));
         ui.hasCarrier = true;
       } else {
         ui.hasCarrier = false;

@@ -51,8 +51,8 @@ public final class MenuScreen extends ContentScreen {
   private final Map<Item, Label> menuLabels = new EnumMap<>(Item.class);
   private final Map<Item, SmoothedValue> offsets = new EnumMap<>(Item.class);
 
-  private StackPane rootContainer; 
-  private BorderPane uiOverlayPane; 
+  private StackPane rootContainer;
+  private BorderPane uiOverlayPane;
   private Color textColor;
   private Color mutedColor;
   private Color selectedColor;
@@ -78,7 +78,7 @@ public final class MenuScreen extends ContentScreen {
   @Override
   protected Node createContent() {
     buildUI();
-    return rootContainer; 
+    return rootContainer;
   }
 
   @Override
@@ -113,14 +113,13 @@ public final class MenuScreen extends ContentScreen {
       bgImageView.setFitWidth(VideoManager.LOGICAL_WIDTH);
       bgImageView.setFitHeight(VideoManager.LOGICAL_HEIGHT);
       bgImageView.setPreserveRatio(false);
-      bgImageView.setSmooth(false); 
-      
+      bgImageView.setSmooth(false);
       rootContainer.getChildren().add(bgImageView);
     }
 
-
-    uiOverlayPane = UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
-    uiOverlayPane.setBackground(null); 
+    uiOverlayPane =
+        UiFactory.createBorderPane(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
+    uiOverlayPane.setBackground(null);
 
     // Title
     // Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
@@ -171,11 +170,9 @@ public final class MenuScreen extends ContentScreen {
     bottomContainer.setAlignment(Pos.BOTTOM_CENTER);
     bottomContainer.setPadding(new Insets(0, 0, 60, 0));
 
-
     // uiOverlayPane.setTop(topContainer);
     uiOverlayPane.setCenter(menuContainer);
     uiOverlayPane.setBottom(bottomContainer);
-
 
     rootContainer.getChildren().add(uiOverlayPane);
 

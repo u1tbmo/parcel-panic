@@ -52,9 +52,10 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private enum ChooseItem {
-    HOST("Host Game"),
-    JOIN("Join Game"),
-    BACK("Back to Main Menu");
+    NAME("Name: "),
+    HOST("Host game"),
+    JOIN("Join game"),
+    BACK("Back to main menu");
 
     private final String text;
 
@@ -68,9 +69,9 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private enum HostingItem {
-    START_MATCH("Start Match"),
-    CHANGE_COLOR("Change Car Color"),
-    CANCEL_HOST("Cancel Host");
+    START_MATCH("Start match"),
+    CHANGE_COLOR("Change car color"),
+    CANCEL_HOST("End session");
 
     private final String text;
 
@@ -99,7 +100,7 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private enum LobbyItem {
-    CHANGE_COLOR("Change Car Color"),
+    CHANGE_COLOR("Change car color"),
     LEAVE("Leave Lobby");
 
     private final String text;
@@ -409,9 +410,9 @@ public final class LobbyScreen extends ContentScreen {
 
     Label titleLabel;
     if (currentMode == Mode.CHOOSE) {
-      titleLabel = UiFactory.createTitle("Multiplayer Lobby", titleFont, textColor);
+      titleLabel = UiFactory.createTitle("Lobby", titleFont, textColor);
     } else if (currentMode == Mode.HOSTING) {
-      titleLabel = UiFactory.createTitle("Hosting Game", titleFont, textColor);
+      titleLabel = UiFactory.createTitle("Host Game", titleFont, textColor);
     } else if (currentMode == Mode.JOINING) {
       titleLabel = UiFactory.createTitle("Join Game", titleFont, textColor);
     } else {
@@ -441,41 +442,18 @@ public final class LobbyScreen extends ContentScreen {
       desc.setPadding(new Insets(0, 0, 10, 0));
       menuContainer.getChildren().add(desc);
 
-      Label nameTitle = UiFactory.createLabel("YOUR NAME", labelFont, selectedColor);
-      nameTitle.setStyle("-fx-font-weight: bold;");
-
-      TextField nameInput = new TextField(myPlayerName);
-      nameInput.setMaxWidth(300);
-      nameInput.setStyle(
-          "-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: white; -fx-font-size: 16px; -fx-border-color: rgba(255, 255, 255, 0.2); -fx-border-width: 1px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 8px;");
-      nameInput
-          .textProperty()
-          .addListener(
-              (obs, oldVal, newVal) -> {
-                myPlayerName = newVal.trim().isEmpty() ? "Player" : newVal.trim();
-                sendNameColorUpdate();
-              });
-      nameInput.setOnKeyPressed(
-          event -> {
-            if (event.getCode() == javafx.scene.input.KeyCode.ENTER
-                || event.getCode() == javafx.scene.input.KeyCode.DOWN) {
-              event.consume();
-              rootPane.requestFocus();
-            }
-          });
-
-      VBox nameBox = new VBox(8, nameTitle, nameInput);
-      nameBox.setPadding(new Insets(0, 0, 20, 0));
-      menuContainer.getChildren().add(nameBox);
-
       for (ChooseItem item : ChooseItem.values()) {
-        Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
+        String text = item.getText();
+        if (item == ChooseItem.NAME) {
+          text += myPlayerName;
+        }
+        Label label = UiFactory.createLabel(text, menuFont, textColor);
         itemLabels.add(label);
         menuContainer.getChildren().add(label);
       }
 
     } else if (currentMode == Mode.HOSTING) {
-      statusLabel = UiFactory.createLabel("Starting local server...", labelFont, textColor);
+      statusLabel = UiFactory.createLabel("Hosting...", labelFont, textColor);
       ipInfoLabel = UiFactory.createLabel("IP: " + resolvedIp, labelFont, selectedColor);
 
       VBox infoBox = new VBox(10, statusLabel, ipInfoLabel);
@@ -485,7 +463,7 @@ public final class LobbyScreen extends ContentScreen {
       for (HostingItem item : HostingItem.values()) {
         String text = item.getText();
         if (item == HostingItem.CHANGE_COLOR) {
-          text = "Change Car Color: " + getColorName(myColorIndex);
+          text = "Change car color: " + getColorName(myColorIndex);
         }
         Label label = UiFactory.createLabel(text, menuFont, textColor);
         itemLabels.add(label);
@@ -522,9 +500,7 @@ public final class LobbyScreen extends ContentScreen {
 
       rebuildJoinItemLabels();
     } else if (currentMode == Mode.LOBBY) {
-      statusLabel =
-          UiFactory.createLabel(
-              "Connected! Waiting for host to start the match...", labelFont, textColor);
+      statusLabel = UiFactory.createLabel("Waiting for host...", labelFont, textColor);
       ipInfoLabel = UiFactory.createLabel("Host IP: " + manualHostIp, labelFont, selectedColor);
       VBox statusBox = new VBox(10, statusLabel, ipInfoLabel);
       statusBox.setAlignment(Pos.CENTER_LEFT);
@@ -740,7 +716,19 @@ public final class LobbyScreen extends ContentScreen {
       if (label != null) {
         boolean highlighted = (i == selectedIndex);
 
-        label.setTextFill(highlighted ? selectedColor : mutedColor);
+        boolean disabled = false;
+        if (currentMode == Mode.HOSTING) {
+          HostingItem item = HostingItem.values()[i];
+          if (item == HostingItem.START_MATCH && activePlayers.size() < 2) {
+            disabled = true;
+          }
+        }
+
+        if (disabled) {
+          label.setTextFill(highlighted ? Color.web("#444444") : Color.web("#222222"));
+        } else {
+          label.setTextFill(highlighted ? selectedColor : mutedColor);
+        }
       }
     }
 
@@ -935,6 +923,7 @@ public final class LobbyScreen extends ContentScreen {
     if (currentMode == Mode.CHOOSE) {
       ChooseItem item = ChooseItem.values()[selectedIndex];
       switch (item) {
+        case NAME -> openNameOverlay();
         case HOST -> startHosting();
         case JOIN -> setMode(Mode.JOINING);
         case BACK -> ctx.navigator().requestSwitch(new parcelpanic.screens.MenuScreen());
@@ -943,8 +932,10 @@ public final class LobbyScreen extends ContentScreen {
       HostingItem item = HostingItem.values()[selectedIndex];
       switch (item) {
         case START_MATCH -> {
-          if (server != null) {
+          if (activePlayers.size() >= 2 && server != null) {
             server.startMatch();
+          } else {
+            ctx.audio().playSound(AudioKey.ERROR);
           }
         }
         case CHANGE_COLOR -> {
@@ -994,22 +985,51 @@ public final class LobbyScreen extends ContentScreen {
   private void openManualIpOverlay() {
     ctx.navigator()
         .push(
-            new HostIpOverlay(
+            new TextInputOverlay(
+                "Enter Host IP",
+                "Type the host IP and press Enter",
                 manualHostIp,
+                "e.g. 192.168.1.10",
                 ip -> {
                   manualHostIp = ip;
                   connectToHost(ip);
                 }));
   }
 
-  private final class HostIpOverlay implements parcelpanic.screen.Screen {
-    private final String initialIp;
+  private void openNameOverlay() {
+    ctx.navigator()
+        .push(
+            new TextInputOverlay(
+                "Set Your Name",
+                "Type your name and press Enter",
+                myPlayerName,
+                "Enter your name",
+                name -> {
+                  myPlayerName = name.isEmpty() ? "Player" : name;
+                  sendNameColorUpdate();
+                  buildUI();
+                }));
+  }
+
+  private final class TextInputOverlay implements parcelpanic.screen.Screen {
+    private final String titleText;
+    private final String helperText;
+    private final String initialValue;
+    private final String promptText;
     private final java.util.function.Consumer<String> onConfirm;
     private BorderPane overlayRoot;
-    private TextField ipField;
+    private TextField inputField;
 
-    private HostIpOverlay(String initialIp, java.util.function.Consumer<String> onConfirm) {
-      this.initialIp = initialIp;
+    private TextInputOverlay(
+        String title,
+        String helper,
+        String initialValue,
+        String prompt,
+        java.util.function.Consumer<String> onConfirm) {
+      this.titleText = title;
+      this.helperText = helper;
+      this.initialValue = initialValue;
+      this.promptText = prompt;
       this.onConfirm = onConfirm;
     }
 
@@ -1030,39 +1050,23 @@ public final class LobbyScreen extends ContentScreen {
       Font titleFont = ctx.assets().getFont(FontKey.DISPLAY);
       Font labelFont = ctx.assets().getFont(FontKey.TITLE);
 
-      Label title = UiFactory.createTitle("Enter Host IP", titleFont, text);
+      Label title = UiFactory.createTitle(titleText, titleFont, text);
       VBox topContainer = new VBox(title);
       topContainer.setAlignment(Pos.TOP_CENTER);
       topContainer.setPadding(new Insets(80, 0, 0, 0));
 
-      Label helper = UiFactory.createLabel("Type the host IP and press Enter", labelFont, muted);
-      ipField = new TextField(initialIp);
-      ipField.setPromptText("e.g. 192.168.1.10");
-      ipField.setMaxWidth(320);
-      ipField.setStyle(
-          String.format(
-              "-fx-font-size: 18px; -fx-alignment: center; -fx-text-fill: %s;"
-                  + " -fx-prompt-text-fill: %s; -fx-control-inner-background: %s;"
-                  + " -fx-background-color: %s; -fx-border-color: %s; -fx-border-width: 2px;"
-                  + " -fx-background-radius: 10px; -fx-border-radius: 10px;"
-                  + " -fx-padding: 8px 12px;",
-              toCssColor(text),
-              toCssColor(muted),
-              toCssColor(surface, 0.85),
-              toCssColor(surface, 0.92),
-              toCssColor(accent)));
-      ipField.setOnKeyPressed(
-          event -> {
-            if (event.getCode() == KeyCode.ENTER) {
-              event.consume();
-              confirm();
-            } else if (event.getCode() == KeyCode.ESCAPE) {
-              event.consume();
-              cancel();
-            }
-          });
+      Label helper = UiFactory.createLabel(helperText, labelFont, muted);
 
-      VBox center = new VBox(16, helper, ipField);
+      inputField =
+          UiFactory.createTextField(
+              initialValue,
+              promptText,
+              ctx.assets().getFont(FontKey.BODY),
+              this::confirm,
+              this::cancel);
+      inputField.setMaxWidth(320);
+
+      VBox center = new VBox(16, helper, inputField);
       center.setAlignment(Pos.CENTER);
 
       Font hintFont = ctx.assets().getFont(FontKey.LABEL);
@@ -1086,13 +1090,13 @@ public final class LobbyScreen extends ContentScreen {
       overlayRoot.setBottom(bottomContainer);
       overlayRoot.setFocusTraversable(true);
 
-      Platform.runLater(() -> ipField.requestFocus());
+      Platform.runLater(() -> inputField.requestFocus());
     }
 
     @Override
     public void exit() {
       overlayRoot = null;
-      ipField = null;
+      inputField = null;
     }
 
     @Override
@@ -1118,8 +1122,8 @@ public final class LobbyScreen extends ContentScreen {
     }
 
     private void confirm() {
-      if (ipField != null) {
-        String value = ipField.getText();
+      if (inputField != null) {
+        String value = inputField.getText();
         onConfirm.accept(value == null ? "" : value.trim());
       }
       ctx.navigator().pop();
@@ -1276,27 +1280,14 @@ public final class LobbyScreen extends ContentScreen {
     chatScrollPane.setStyle(
         "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
 
-    chatInputField = new TextField();
-    chatInputField.setPromptText("Press Enter to send message...");
+    chatInputField =
+        UiFactory.createTextField(
+            "",
+            "Press Enter to send message...",
+            ctx.assets().getFont(FontKey.BODY),
+            this::sendChat,
+            () -> rootPane.requestFocus());
     chatInputField.setPrefWidth(380);
-    chatInputField.setStyle(
-        "-fx-background-color: rgba(0, 0, 0, 0.5);"
-            + " -fx-text-fill: white;"
-            + " -fx-prompt-text-fill: #888888;"
-            + " -fx-border-color: rgba(255, 255, 255, 0.1);"
-            + " -fx-border-radius: 6px;"
-            + " -fx-background-radius: 6px;"
-            + " -fx-padding: 8px 12px;");
-
-    chatInputField.setOnAction(e -> sendChat());
-
-    chatInputField.setOnKeyPressed(
-        event -> {
-          if (event.getCode() == KeyCode.ESCAPE) {
-            rootPane.requestFocus();
-            event.consume();
-          }
-        });
 
     chatPanel.getChildren().addAll(chatTitle, chatScrollPane, chatInputField);
     return chatPanel;
@@ -1353,9 +1344,7 @@ public final class LobbyScreen extends ContentScreen {
                         new java.io.OutputStreamWriter(
                             activeSocket.getOutputStream(),
                             java.nio.charset.StandardCharsets.UTF_8));
-                String username = (server != null) ? "Host" : "Player";
-
-                writer.write("CHAT:" + username + ": " + text + "\n");
+                writer.write("CHAT:" + text + "\n");
                 writer.flush();
               } catch (Exception e) {
                 System.err.println("[LobbyScreen] Error sending chat: " + e.getMessage());
