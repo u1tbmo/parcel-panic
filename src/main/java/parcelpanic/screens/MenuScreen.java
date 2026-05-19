@@ -113,7 +113,7 @@ public final class MenuScreen extends ContentScreen {
       bgImageView.setFitWidth(VideoManager.LOGICAL_WIDTH);
       bgImageView.setFitHeight(VideoManager.LOGICAL_HEIGHT);
       bgImageView.setPreserveRatio(false);
-      bgImageView.setSmooth(false); // Keeps pixel-art game assets crisp when scaled
+      bgImageView.setSmooth(false); 
       
       rootContainer.getChildren().add(bgImageView);
     }
