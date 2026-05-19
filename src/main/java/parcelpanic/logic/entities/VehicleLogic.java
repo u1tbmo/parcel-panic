@@ -21,6 +21,7 @@ public class VehicleLogic {
   private boolean isDashing = false;
   private boolean isAccelerating = false;
   private VehicleState.PromptType prompt = VehicleState.PromptType.NONE;
+  private int colorIndex = 1; // default to Red style 1
 
   public VehicleLogic(int id, double x, double y) {
     this.id = id;
@@ -127,7 +128,15 @@ public class VehicleLogic {
   }
 
   public VehicleState state() {
-    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt);
+    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
+  }
+
+  public int getColorIndex() {
+    return colorIndex;
+  }
+
+  public void setColorIndex(int colorIndex) {
+    this.colorIndex = colorIndex;
   }
 
   public int id() {

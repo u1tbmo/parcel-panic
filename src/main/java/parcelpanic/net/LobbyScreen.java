@@ -14,7 +14,12 @@ import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.shape.Rectangle;
+import parcelpanic.media.AssetKeys.ImageKey;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
@@ -62,6 +67,7 @@ public final class LobbyScreen extends ContentScreen {
 
   private enum HostingItem {
     START_MATCH("Start Match"),
+    CHANGE_COLOR("Change Car Color"),
     CANCEL_HOST("Cancel Host");
 
     private final String text;
@@ -91,6 +97,7 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private enum LobbyItem {
+    CHANGE_COLOR("Change Car Color"),
     LEAVE("Leave Lobby");
 
     private final String text;
@@ -108,7 +115,10 @@ public final class LobbyScreen extends ContentScreen {
   private int selectedIndex = 0;
 
   private final List<Label> itemLabels = new ArrayList<>();
+  private final List<String> activePlayers = new ArrayList<>();
   private final Map<Integer, SmoothedValue> offsets = new HashMap<>();
+  private String myPlayerName = "Player";
+  private int myColorIndex = 1; // Default to Red, Style 1
 
   private GameServer server;
   private java.net.Socket activeSocket;
@@ -148,19 +158,6 @@ public final class LobbyScreen extends ContentScreen {
 
   @Override
   public void fixedUpdate(double dtSeconds) {
-    if (currentMode == Mode.HOSTING && server != null && statusLabel != null) {
-      int count = server.getConnectedCount();
-      if (count != lastPlayerCount) {
-        lastPlayerCount = count;
-        Platform.runLater(
-            () -> {
-              if (statusLabel != null && currentMode == Mode.HOSTING) {
-                statusLabel.setText("Players Connected: " + count + " / 4");
-              }
-            });
-      }
-    }
-
     int itemCount = getItemCount();
     for (int i = 0; i < itemCount; i++) {
       double target = (i == selectedIndex) ? 12.0 : 0.0;
@@ -233,6 +230,7 @@ public final class LobbyScreen extends ContentScreen {
     this.selectedIndex = 0;
     this.lastPlayerCount = -1;
     this.offsets.clear();
+    this.activePlayers.clear();
 
     if (newMode == Mode.JOINING) {
       this.discoveredServers.clear();
@@ -367,20 +365,49 @@ public final class LobbyScreen extends ContentScreen {
       titleLabel = UiFactory.createTitle("Lobby", titleFont, textColor);
     }
 
-    VBox topContainer = new VBox(titleLabel);
-    topContainer.setAlignment(Pos.TOP_CENTER);
-    topContainer.setPadding(new Insets(80, 0, 0, 0));
+    VBox topContainer = null;
+    if (currentMode == Mode.CHOOSE || currentMode == Mode.JOINING) {
+      topContainer = new VBox(titleLabel);
+      topContainer.setAlignment(Pos.TOP_CENTER);
+      topContainer.setPadding(new Insets(40, 0, 0, 0));
+    }
 
-    VBox menuContainer = new VBox(20);
-    menuContainer.setAlignment(Pos.CENTER_LEFT);
-    menuContainer.setPadding(new Insets(0, 0, 0, 100));
+    VBox menuContainer = new VBox(12);
+    menuContainer.setAlignment(Pos.TOP_LEFT);
+    menuContainer.setPadding(new Insets(40, 0, 0, 100));
     this.menuContainer = menuContainer;
+
+    if (currentMode == Mode.HOSTING || currentMode == Mode.LOBBY) {
+      titleLabel.setPadding(new Insets(0, 0, 10, 0));
+      menuContainer.getChildren().add(titleLabel);
+    }
 
     if (currentMode == Mode.CHOOSE) {
       Label desc =
           UiFactory.createLabel("Select your role to start or join a match", labelFont, textColor);
-      desc.setPadding(new Insets(0, 0, 20, 0));
+      desc.setPadding(new Insets(0, 0, 10, 0));
       menuContainer.getChildren().add(desc);
+
+      Label nameTitle = UiFactory.createLabel("YOUR NAME", labelFont, selectedColor);
+      nameTitle.setStyle("-fx-font-weight: bold;");
+
+      TextField nameInput = new TextField(myPlayerName);
+      nameInput.setMaxWidth(300);
+      nameInput.setStyle("-fx-background-color: rgba(255, 255, 255, 0.08); -fx-text-fill: white; -fx-font-size: 16px; -fx-border-color: rgba(255, 255, 255, 0.2); -fx-border-width: 1px; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 8px;");
+      nameInput.textProperty().addListener((obs, oldVal, newVal) -> {
+        myPlayerName = newVal.trim().isEmpty() ? "Player" : newVal.trim();
+        sendNameColorUpdate();
+      });
+      nameInput.setOnKeyPressed(event -> {
+        if (event.getCode() == javafx.scene.input.KeyCode.ENTER || event.getCode() == javafx.scene.input.KeyCode.DOWN) {
+          event.consume();
+          rootPane.requestFocus();
+        }
+      });
+
+      VBox nameBox = new VBox(8, nameTitle, nameInput);
+      nameBox.setPadding(new Insets(0, 0, 20, 0));
+      menuContainer.getChildren().add(nameBox);
 
       for (ChooseItem item : ChooseItem.values()) {
         Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
@@ -395,11 +422,15 @@ public final class LobbyScreen extends ContentScreen {
               "IP: " + resolvedIp, labelFont, selectedColor);
 
       VBox infoBox = new VBox(10, statusLabel, ipInfoLabel);
-      infoBox.setPadding(new Insets(0, 0, 20, 0));
+      infoBox.setPadding(new Insets(0, 0, 10, 0));
       menuContainer.getChildren().add(infoBox);
 
       for (HostingItem item : HostingItem.values()) {
-        Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
+        String text = item.getText();
+        if (item == HostingItem.CHANGE_COLOR) {
+          text = "Change Car Color: " + getColorName(myColorIndex);
+        }
+        Label label = UiFactory.createLabel(text, menuFont, textColor);
         itemLabels.add(label);
         menuContainer.getChildren().add(label);
       }
@@ -437,12 +468,20 @@ public final class LobbyScreen extends ContentScreen {
       statusLabel =
           UiFactory.createLabel(
               "Connected! Waiting for host to start the match...", labelFont, textColor);
-      VBox statusBox = new VBox(12, statusLabel);
+      ipInfoLabel =
+          UiFactory.createLabel(
+              "Host IP: " + manualHostIp, labelFont, selectedColor);
+      VBox statusBox = new VBox(10, statusLabel, ipInfoLabel);
       statusBox.setAlignment(Pos.CENTER_LEFT);
+      statusBox.setPadding(new Insets(0, 0, 10, 0));
       menuContainer.getChildren().add(statusBox);
 
       for (LobbyItem item : LobbyItem.values()) {
-        Label label = UiFactory.createLabel(item.getText(), menuFont, textColor);
+        String text = item.getText();
+        if (item == LobbyItem.CHANGE_COLOR) {
+          text = "Change Car Color: " + getColorName(myColorIndex);
+        }
+        Label label = UiFactory.createLabel(text, menuFont, textColor);
         itemLabels.add(label);
         menuContainer.getChildren().add(label);
       }
@@ -484,18 +523,30 @@ public final class LobbyScreen extends ContentScreen {
 
     VBox bottomContainer = new VBox(20, hintsRow);
     bottomContainer.setAlignment(Pos.BOTTOM_CENTER);
-    bottomContainer.setPadding(new Insets(0, 0, 60, 0));
+    bottomContainer.setPadding(new Insets(0, 0, 30, 0));
 
     rootPane.setTop(topContainer);
 
     if (currentMode == Mode.HOSTING || currentMode == Mode.LOBBY) {
       VBox chatSide = buildChatPanel();
-      HBox splitBox = new HBox(40);
+      chatSide.setPrefWidth(430);
+      chatSide.setPrefHeight(350);
+
+      VBox playersList = buildPlayersListSection(labelFont, menuFont);
+      playersList.setPrefWidth(430);
+
+      VBox rightContainer = new VBox(15, playersList, chatSide);
+      rightContainer.setAlignment(Pos.TOP_LEFT);
+      rightContainer.setPadding(new Insets(40, 0, 0, 0));
+      rightContainer.setPrefWidth(430);
+
+      HBox splitBox = new HBox(60);
       splitBox.setAlignment(Pos.CENTER);
       splitBox.setPadding(new Insets(0, 50, 0, 50));
-      menuContainer.setPrefWidth(700);
-      chatSide.setPrefWidth(430);
-      splitBox.getChildren().addAll(menuContainer, chatSide);
+
+      menuContainer.setPrefWidth(550);
+
+      splitBox.getChildren().addAll(menuContainer, rightContainer);
       rootPane.setCenter(splitBox);
     } else {
       rootPane.setCenter(menuContainer);
@@ -505,6 +556,124 @@ public final class LobbyScreen extends ContentScreen {
 
     updateSelectionColors();
     Platform.runLater(() -> rootPane.requestFocus());
+  }
+
+  private VBox buildPlayersListSection(Font labelFont, Font menuFont) {
+    Label playersHeader = UiFactory.createLabel("PLAYERS IN LOBBY (" + activePlayers.size() + "/4)", labelFont, selectedColor);
+    playersHeader.setStyle("-fx-font-weight: bold;");
+    VBox playersListBox = new VBox(8);
+    playersListBox.setPadding(new Insets(10, 15, 10, 15));
+    playersListBox.setStyle("-fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-width: 1px; -fx-border-radius: 8px; -fx-background-radius: 8px;");
+
+    for (int i = 0; i < 4; i++) {
+      if (i < activePlayers.size()) {
+        String playerEntry = activePlayers.get(i);
+        String name = playerEntry;
+        String colorName = "Red";
+        if (playerEntry.contains("|")) {
+          String[] parts = playerEntry.split("\\|");
+          name = parts[0];
+          colorName = parts[1];
+        }
+
+        ImageKey key = switch (colorName.toLowerCase()) {
+          case "red" -> ImageKey.VEHICLE_CAR_RED_1;
+          case "blue" -> ImageKey.VEHICLE_CAR_BLUE_1;
+          case "green" -> ImageKey.VEHICLE_CAR_GREEN_1;
+          case "yellow" -> ImageKey.VEHICLE_CAR_YELLOW_1;
+          case "orange" -> ImageKey.VEHICLE_CAR_ORANGE_1;
+          case "pink" -> ImageKey.VEHICLE_CAR_PINK_1;
+          case "magenta" -> ImageKey.VEHICLE_CAR_MAGENTA_1;
+          default -> ImageKey.VEHICLE_CAR;
+        };
+
+        Image img = ctx.assets().getImage(key);
+        ImageView view = new ImageView(img);
+        view.setViewport(new Rectangle2D(0, 0, 22, 22)); // First frame facing North
+        view.setFitWidth(30);
+        view.setFitHeight(30);
+        view.setSmooth(false); // crisp retro pixel art
+
+        Label nameLabel = UiFactory.createLabel("  " + name, menuFont, textColor);
+
+        HBox row = new HBox(view, nameLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        playersListBox.getChildren().add(row);
+      } else {
+        // Empty slot placeholder
+        Rectangle rect = new Rectangle(30, 30);
+        rect.setFill(Color.TRANSPARENT);
+        rect.setStroke(Color.color(1, 1, 1, 0.15));
+        rect.setStrokeWidth(1.5);
+        rect.getStrokeDashArray().addAll(4.0, 4.0);
+
+        Label openLabel = UiFactory.createLabel("  [Open Slot]", menuFont, mutedColor);
+        openLabel.setStyle("-fx-opacity: 0.5;");
+
+        HBox row = new HBox(rect, openLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        playersListBox.getChildren().add(row);
+      }
+    }
+    VBox playersContainer = new VBox(10, playersHeader, playersListBox);
+    playersContainer.setPadding(new Insets(0, 0, 15, 0));
+    return playersContainer;
+  }
+
+  private void updatePlayerList(String playersStr) {
+    activePlayers.clear();
+    if (!playersStr.trim().isEmpty()) {
+      for (String p : playersStr.split(",")) {
+        activePlayers.add(p.trim());
+      }
+    }
+    buildUI();
+  }
+
+  private String getColorName(int colorIndex) {
+    int color = colorIndex / 10;
+    return switch(color) {
+      case 0 -> "Red";
+      case 1 -> "Blue";
+      case 2 -> "Green";
+      case 3 -> "Yellow";
+      case 4 -> "Orange";
+      case 5 -> "Pink";
+      case 6 -> "Magenta";
+      default -> "Red";
+    };
+  }
+
+  private int getNextColorIndex(int currentIndex, boolean forward) {
+    int color = currentIndex / 10;
+    int style = currentIndex % 10;
+    if (style != 1 && style != 2) style = 1;
+
+    if (forward) {
+      color = (color + 1) % 7;
+    } else {
+      color = (color - 1 + 7) % 7;
+    }
+    return color * 10 + style;
+  }
+
+  private int toggleStyle(int currentIndex) {
+    int color = currentIndex / 10;
+    int style = currentIndex % 10;
+    style = (style == 1) ? 2 : 1;
+    return color * 10 + style;
+  }
+
+  private void sendNameColorUpdate() {
+    if (activeSocket != null && !socketHandedOffToGame) {
+      try {
+        java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(activeSocket.getOutputStream()));
+        writer.write("NAME_COLOR:" + myPlayerName + ":" + myColorIndex + "\n");
+        writer.flush();
+      } catch (java.io.IOException e) {
+        System.err.println("Failed to send NAME_COLOR update: " + e.getMessage());
+      }
+    }
   }
 
   private void updateSelectionColors() {
@@ -566,6 +735,10 @@ public final class LobbyScreen extends ContentScreen {
       }
       activeSocket = null;
     }
+    chatPanel = null;
+    chatMessagesContainer = null;
+    chatScrollPane = null;
+    chatInputField = null;
   }
 
   private void stopHosting() {
@@ -597,6 +770,7 @@ public final class LobbyScreen extends ContentScreen {
               try {
                 socket = new Socket(ip, 5555);
                 this.activeSocket = socket;
+                sendNameColorUpdate();
                 BufferedReader reader =
                     new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -621,6 +795,9 @@ public final class LobbyScreen extends ContentScreen {
                   } else if (line.startsWith("CHAT:")) {
                     String chatMsg = line.substring(5);
                     Platform.runLater(() -> addChatMessage(chatMsg));
+                  } else if (line.startsWith("PLAYERS:")) {
+                    String playersStr = line.substring(8);
+                    Platform.runLater(() -> updatePlayerList(playersStr));
                   } else if (line.equals("START")) {
                     final int finalPlayerId = playerId;
                     final Socket finalSocket = socket;
@@ -704,6 +881,11 @@ public final class LobbyScreen extends ContentScreen {
             server.startMatch();
           }
         }
+        case CHANGE_COLOR -> {
+          myColorIndex = getNextColorIndex(myColorIndex, true);
+          sendNameColorUpdate();
+          buildUI();
+        }
         case CANCEL_HOST -> stopHosting();
       }
     } else if (currentMode == Mode.JOINING) {
@@ -724,6 +906,11 @@ public final class LobbyScreen extends ContentScreen {
     } else if (currentMode == Mode.LOBBY) {
       LobbyItem item = LobbyItem.values()[selectedIndex];
       switch (item) {
+        case CHANGE_COLOR -> {
+          myColorIndex = getNextColorIndex(myColorIndex, true);
+          sendNameColorUpdate();
+          buildUI();
+        }
         case LEAVE -> {
           closeActiveSocket();
           setMode(Mode.CHOOSE);
@@ -910,6 +1097,44 @@ public final class LobbyScreen extends ContentScreen {
         selectedIndex = (selectedIndex + 1) % count;
         ctx.audio().playSound(AudioKey.MOVE_SELECTION);
       }
+      case UI_LEFT -> {
+        if (currentMode == Mode.HOSTING) {
+          HostingItem item = HostingItem.values()[selectedIndex];
+          if (item == HostingItem.CHANGE_COLOR) {
+            myColorIndex = getNextColorIndex(myColorIndex, false);
+            sendNameColorUpdate();
+            buildUI();
+            ctx.audio().playSound(AudioKey.MOVE_SELECTION);
+          }
+        } else if (currentMode == Mode.LOBBY) {
+          LobbyItem item = LobbyItem.values()[selectedIndex];
+          if (item == LobbyItem.CHANGE_COLOR) {
+            myColorIndex = getNextColorIndex(myColorIndex, false);
+            sendNameColorUpdate();
+            buildUI();
+            ctx.audio().playSound(AudioKey.MOVE_SELECTION);
+          }
+        }
+      }
+      case UI_RIGHT -> {
+        if (currentMode == Mode.HOSTING) {
+          HostingItem item = HostingItem.values()[selectedIndex];
+          if (item == HostingItem.CHANGE_COLOR) {
+            myColorIndex = getNextColorIndex(myColorIndex, true);
+            sendNameColorUpdate();
+            buildUI();
+            ctx.audio().playSound(AudioKey.MOVE_SELECTION);
+          }
+        } else if (currentMode == Mode.LOBBY) {
+          LobbyItem item = LobbyItem.values()[selectedIndex];
+          if (item == LobbyItem.CHANGE_COLOR) {
+            myColorIndex = getNextColorIndex(myColorIndex, true);
+            sendNameColorUpdate();
+            buildUI();
+            ctx.audio().playSound(AudioKey.MOVE_SELECTION);
+          }
+        }
+      }
       case CONFIRM -> {
         ctx.audio().playSound(AudioKey.CLICK);
         handleConfirm();
@@ -940,15 +1165,18 @@ public final class LobbyScreen extends ContentScreen {
   }
 
   private VBox buildChatPanel() {
+    if (chatPanel != null) {
+      return chatPanel;
+    }
     chatPanel = new VBox(15);
-    chatPanel.setPadding(new Insets(20));
+    chatPanel.setPadding(new Insets(10, 15, 10, 15));
     chatPanel.setAlignment(Pos.TOP_CENTER);
     chatPanel.setStyle(
-        "-fx-background-color: rgba(30, 30, 30, 0.65);"
-            + " -fx-background-radius: 12px;"
-            + " -fx-border-color: rgba(255, 255, 255, 0.15);"
-            + " -fx-border-radius: 12px;"
-            + " -fx-border-width: 1px;");
+        "-fx-background-color: rgba(255, 255, 255, 0.05);"
+            + " -fx-border-color: rgba(255, 255, 255, 0.1);"
+            + " -fx-border-width: 1px;"
+            + " -fx-border-radius: 8px;"
+            + " -fx-background-radius: 8px;");
 
     // Title
     Font titleFont = ctx.assets().getFont(FontKey.TITLE);
@@ -963,7 +1191,12 @@ public final class LobbyScreen extends ContentScreen {
     chatScrollPane.setFitToWidth(true);
     chatScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
     chatScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-    chatScrollPane.setPrefHeight(280);
+    chatScrollPane.setPrefHeight(180);
+
+    // Auto-scroll on container height changes (perfect dynamic scroll alignment)
+    chatMessagesContainer.heightProperty().addListener((obs, oldVal, newVal) -> {
+      chatScrollPane.setVvalue(1.0);
+    });
     chatScrollPane.setStyle(
         "-fx-background: transparent; -fx-background-color: transparent; -fx-viewport-background-color: transparent;");
 
@@ -1001,9 +1234,15 @@ public final class LobbyScreen extends ContentScreen {
     Font chatFont = ctx.assets().getFont(FontKey.LABEL);
     Label messageLabel = new Label(msg);
     messageLabel.setFont(chatFont);
-    messageLabel.setTextFill(textColor);
     messageLabel.setWrapText(true);
     messageLabel.setMaxWidth(380);
+
+    if (msg.startsWith(">>>")) {
+      messageLabel.setTextFill(selectedColor);
+      messageLabel.setStyle("-fx-font-weight: bold;");
+    } else {
+      messageLabel.setTextFill(textColor);
+    }
 
     chatMessagesContainer.getChildren().add(messageLabel);
 

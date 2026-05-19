@@ -54,6 +54,13 @@ public class GameSimulation {
     interactionGauges.put(id, 0.0);
   }
 
+  public void setVehicleColor(int id, int colorIndex) {
+    VehicleLogic v = vehicles.get(id);
+    if (v != null) {
+      v.setColorIndex(colorIndex);
+    }
+  }
+
   public void addParcel(ParcelLogic parcel) {
     parcels.add(parcel);
   }

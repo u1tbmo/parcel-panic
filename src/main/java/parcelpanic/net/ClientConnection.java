@@ -25,6 +25,8 @@ public class ClientConnection implements Runnable {
   private volatile boolean connected = true;
   private volatile PlayerIntent latestIntent = null;
   private final BlockingQueue<GameState> statesToSend = new LinkedBlockingQueue<>();
+  private String customName = null;
+  private int carColorIndex = 1; // Default to Red, Style 1
 
   public ClientConnection(Socket socket, GameServer server, int clientId) {
     this.socket = socket;
@@ -46,8 +48,9 @@ public class ClientConnection implements Runnable {
       writer.flush();
 
       // Broadcast join announcement
-      String joinMsg = "[System] Player " + (clientId + 1) + (clientId == 0 ? " (Host)" : "") + " has joined the lobby!";
+      String joinMsg = ">>> Player " + (clientId + 1) + (clientId == 0 ? " (Host)" : "") + " has joined the lobby!";
       server.broadcastChatMessage(joinMsg);
+      server.broadcastPlayerList();
 
       // Main client loop: receive intents and send state
       String line;
@@ -61,9 +64,18 @@ public class ClientConnection implements Runnable {
           if (intent != null) {
             latestIntent = intent;
           }
+        } else if (line.startsWith("NAME_COLOR:")) {
+          String[] parts = line.split(":", 3);
+          if (parts.length >= 3) {
+            this.customName = parts[1];
+            try {
+              this.carColorIndex = Integer.parseInt(parts[2]);
+            } catch (NumberFormatException ignored) {}
+            server.broadcastPlayerList();
+          }
         } else if (line.startsWith("CHAT:")) {
           String chatMsg = line.substring(5);
-          server.broadcastChatMessage("Player " + (clientId + 1) + ": " + chatMsg);
+          server.broadcastChatMessage(getCustomName() + ": " + chatMsg);
         } else if (line.equals("PING")) {
           writer.write("PONG\n");
           writer.flush();
@@ -92,6 +104,17 @@ public class ClientConnection implements Runnable {
     if (!connected) return;
     try {
       writer.write("CHAT:" + message + "\n");
+      writer.flush();
+    } catch (IOException e) {
+      connected = false;
+    }
+  }
+
+  /// Send a raw message to this client.
+  public void sendRawMessage(String message) {
+    if (!connected) return;
+    try {
+      writer.write(message + "\n");
       writer.flush();
     } catch (IOException e) {
       connected = false;
@@ -154,8 +177,24 @@ public class ClientConnection implements Runnable {
 
     System.out.println("[Server] Client " + clientId + " disconnected");
     if (server.isRunning()) {
-      server.broadcastChatMessage("[System] Player " + (clientId + 1) + " has left the lobby.");
+      server.broadcastChatMessage(">>> " + getCustomName() + " has left the lobby.");
     }
     server.clientDisconnected(clientId);
+  }
+
+  public String getCustomName() {
+    return customName != null ? customName : "Player " + (clientId + 1);
+  }
+
+  public void setCustomName(String name) {
+    this.customName = name;
+  }
+
+  public int getCarColorIndex() {
+    return carColorIndex;
+  }
+
+  public void setCarColorIndex(int colorIndex) {
+    this.carColorIndex = colorIndex;
   }
 }

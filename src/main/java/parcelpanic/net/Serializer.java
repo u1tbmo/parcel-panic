@@ -101,6 +101,7 @@ public class Serializer {
     obj.addProperty("isDashing", v.isDashing());
     obj.addProperty("isAccelerating", v.isAccelerating());
     obj.addProperty("prompt", v.prompt().name());
+    obj.addProperty("colorIndex", v.colorIndex());
     return obj;
   }
 
@@ -114,8 +115,9 @@ public class Serializer {
     boolean isDashing = obj.get("isDashing").getAsBoolean();
     boolean isAccelerating = obj.get("isAccelerating").getAsBoolean();
     PromptType prompt = PromptType.valueOf(obj.get("prompt").getAsString());
+    int colorIndex = obj.has("colorIndex") ? obj.get("colorIndex").getAsInt() : 1; // default to Red style 1
 
-    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt);
+    return new VehicleState(id, x, y, vx, vy, rotation, isDashing, isAccelerating, prompt, colorIndex);
   }
 
   private static JsonObject serializeParcelState(ParcelState p) {

@@ -118,6 +118,11 @@ public class GameServer implements Runnable {
     }
 
     matchStarted.set(true);
+    for (ClientConnection client : clients) {
+      if (client.isConnected()) {
+        simulation.setVehicleColor(client.getClientId(), client.getCarColorIndex());
+      }
+    }
     synchronized (clientCountLock) {
       clientCountLock.notifyAll();
     }
@@ -135,6 +140,39 @@ public class GameServer implements Runnable {
     System.out.println("[Server] Broadcasting CHAT: " + message);
     for (ClientConnection client : clients) {
       client.sendChatMessage(message);
+    }
+  }
+
+  public void broadcastPlayerList() {
+    List<String> playerNames = new ArrayList<>();
+    for (ClientConnection conn : clients) {
+      if (conn.isConnected()) {
+        String name = conn.getCustomName();
+        if (conn.getClientId() == 0) {
+          name += " (Host)";
+        }
+        int colorIndex = conn.getCarColorIndex();
+        int color = colorIndex / 10;
+        int style = colorIndex % 10;
+        String colorName = switch(color) {
+          case 0 -> "Red";
+          case 1 -> "Blue";
+          case 2 -> "Green";
+          case 3 -> "Yellow";
+          case 4 -> "Orange";
+          case 5 -> "Pink";
+          case 6 -> "Magenta";
+          default -> "Red";
+        };
+        playerNames.add(name + "|" + colorName);
+      }
+    }
+    String packet = "PLAYERS:" + String.join(",", playerNames);
+    System.out.println("[Server] Broadcasting " + packet);
+    for (ClientConnection client : clients) {
+      if (client.isConnected()) {
+        client.sendRawMessage(packet);
+      }
     }
   }
 
@@ -225,6 +263,7 @@ public class GameServer implements Runnable {
     if (simulation != null) {
       simulation.removePlayer(clientId);
     }
+    broadcastPlayerList();
 
     if (matchStarted.get() && clients.size() < MIN_CLIENTS_TO_START) {
       System.out.println("[Server] Game interrupted: not enough clients");

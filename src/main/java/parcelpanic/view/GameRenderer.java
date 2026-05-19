@@ -91,9 +91,9 @@ public final class GameRenderer {
       return;
     }
 
-    Image carSprite = assets.getImage(ImageKey.VEHICLE_CAR);
-
     for (VehicleState vehicle : state.vehicles()) {
+      Image carSprite = assets.getImage(getImageKeyForVehicle(vehicle.id(), vehicle.colorIndex()));
+
       EntityInterpolator interpolator =
           vehicleInterpolators.computeIfAbsent(
               vehicle.id(), id -> new EntityInterpolator(vehicle.x(), vehicle.y(), 50.0));
@@ -333,5 +333,21 @@ public final class GameRenderer {
     }
 
     gc.restore();
+  }
+
+  private ImageKey getImageKeyForVehicle(int id, int colorIndex) {
+    int color = colorIndex / 10;
+    long time = System.currentTimeMillis() + id * 120L;
+    int style = ((time / 500) % 2 == 0) ? 1 : 2;
+    return switch(color) {
+      case 0 -> (style == 1) ? ImageKey.VEHICLE_CAR_RED_1 : ImageKey.VEHICLE_CAR_RED_2;
+      case 1 -> (style == 1) ? ImageKey.VEHICLE_CAR_BLUE_1 : ImageKey.VEHICLE_CAR_BLUE_2;
+      case 2 -> (style == 1) ? ImageKey.VEHICLE_CAR_GREEN_1 : ImageKey.VEHICLE_CAR_GREEN_2;
+      case 3 -> (style == 1) ? ImageKey.VEHICLE_CAR_YELLOW_1 : ImageKey.VEHICLE_CAR_YELLOW_2;
+      case 4 -> (style == 1) ? ImageKey.VEHICLE_CAR_ORANGE_1 : ImageKey.VEHICLE_CAR_ORANGE_2;
+      case 5 -> (style == 1) ? ImageKey.VEHICLE_CAR_PINK_1 : ImageKey.VEHICLE_CAR_PINK_2;
+      case 6 -> (style == 1) ? ImageKey.VEHICLE_CAR_MAGENTA_1 : ImageKey.VEHICLE_CAR_MAGENTA_2;
+      default -> ImageKey.VEHICLE_CAR;
+    };
   }
 }

@@ -11,7 +11,8 @@ public record VehicleState(
     double rotation,
     boolean isDashing,
     boolean isAccelerating,
-    PromptType prompt) {
+    PromptType prompt,
+    int colorIndex) {
   public enum PromptType {
     NONE,
     PICKUP,
