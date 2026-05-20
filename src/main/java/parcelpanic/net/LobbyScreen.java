@@ -6,6 +6,10 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -294,12 +298,33 @@ public final class LobbyScreen extends ContentScreen {
       Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
       while (interfaces.hasMoreElements()) {
         NetworkInterface iface = interfaces.nextElement();
-        if (iface.isLoopback() || !iface.isUp()) continue;
+        if (iface.isLoopback() || iface.isVirtual() || !iface.isUp()) continue;
 
         Enumeration<InetAddress> addresses = iface.getInetAddresses();
         while (addresses.hasMoreElements()) {
           InetAddress addr = addresses.nextElement();
           if (addr instanceof Inet4Address) {
+            // Prefer site-local LAN IPs (e.g. 192.168.x.x, 10.x.x.x). This avoids picking
+            // VPN/virtual adapter addresses that other PCs can't route to.
+            if (addr.isSiteLocalAddress()) {
+              return addr.getHostAddress();
+            }
+          }
+        }
+      }
+    } catch (Exception ignored) {
+    }
+
+    // Fallback: any non-loopback IPv4.
+    try {
+      Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+      while (interfaces.hasMoreElements()) {
+        NetworkInterface iface = interfaces.nextElement();
+        if (iface.isLoopback() || iface.isVirtual() || !iface.isUp()) continue;
+        Enumeration<InetAddress> addresses = iface.getInetAddresses();
+        while (addresses.hasMoreElements()) {
+          InetAddress addr = addresses.nextElement();
+          if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
             return addr.getHostAddress();
           }
         }
@@ -909,7 +934,9 @@ public final class LobbyScreen extends ContentScreen {
             () -> {
               Socket socket = null;
               try {
-                socket = new Socket(ip, 5555);
+                socket = new Socket();
+                // Avoid hanging indefinitely on bad routes.
+                socket.connect(new InetSocketAddress(ip, 5555), 3000);
                 this.activeSocket = socket;
                 sendNameColorUpdate();
                 BufferedReader reader =
@@ -1001,7 +1028,7 @@ public final class LobbyScreen extends ContentScreen {
                         ctx.navigator().push(new parcelpanic.screens.KickOverlay("Host Exited"));
                       } else {
                         if (statusLabel != null) {
-                          statusLabel.setText("Connection failed: " + e.getMessage());
+                          statusLabel.setText("Connection failed: " + formatConnectError(ip, 5555, e));
                         }
                       }
                       if (server == null) {
@@ -1012,6 +1039,24 @@ public final class LobbyScreen extends ContentScreen {
             },
             "Lobby-Connector")
         .start();
+  }
+
+  private static String formatConnectError(String ip, int port, Exception e) {
+    if (e instanceof NoRouteToHostException) {
+      return "No route to host (" + ip + ":" + port + "). Check you are on the same LAN and not using a VPN.";
+    }
+    if (e instanceof SocketTimeoutException) {
+      return "Timed out (" + ip + ":" + port + "). Check firewall and that the host is reachable.";
+    }
+    if (e instanceof ConnectException) {
+      String msg = e.getMessage();
+      if (msg != null && msg.toLowerCase().contains("refused")) {
+        return "Connection refused (" + ip + ":" + port + "). Host is reachable but server isn't accepting.";
+      }
+      return "Connection error (" + ip + ":" + port + "): " + msg;
+    }
+    String msg = e.getMessage();
+    return msg != null ? msg : e.getClass().getSimpleName();
   }
 
   private void handleConfirm() {

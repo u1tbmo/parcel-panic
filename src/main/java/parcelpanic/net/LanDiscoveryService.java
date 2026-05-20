@@ -88,7 +88,13 @@ public final class LanDiscoveryService {
                     String[] parts = payload.split(":");
 
                     if (parts.length >= 3) {
-                      String ip = parts[0];
+                      // The IP in the broadcast payload can be wrong on multi-NIC machines
+                      // (VPNs, virtual adapters, etc). The UDP packet source address is the
+                      // address other PCs can actually route to.
+                      String ip = packet.getAddress() != null ? packet.getAddress().getHostAddress() : null;
+                      if (ip == null || ip.isBlank()) {
+                        ip = parts[0];
+                      }
                       int currentPlayers = Integer.parseInt(parts[1]);
                       int maxPlayers = Integer.parseInt(parts[2]);
 
