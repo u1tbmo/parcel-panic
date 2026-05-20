@@ -24,7 +24,7 @@ public class MatchRules {
   public static final double VEHICLE_H_OFFSET_X = -0.5 * VEHICLE_SCALE;
   public static final double VEHICLE_H_OFFSET_Y = 2.0 * VEHICLE_SCALE;
 
-  public static final double DASH_FORCE = 620.0;
+  public static final double DASH_FORCE = 800.0;
   public static final double DASH_COOLDOWN_TIME = 0.75;
 
   // Physics - Items

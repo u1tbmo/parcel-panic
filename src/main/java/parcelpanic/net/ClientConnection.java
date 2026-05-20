@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import parcelpanic.shared.GameState;
 import parcelpanic.shared.PlayerIntent;
 
@@ -25,6 +26,8 @@ public class ClientConnection implements Runnable {
   private volatile boolean connected = true;
   private volatile PlayerIntent latestIntent = null;
   private final BlockingQueue<GameState> statesToSend = new LinkedBlockingQueue<>();
+  private volatile boolean writerRunning = false;
+  private Thread writerThread;
   private String customName = null;
   private int carColorIndex = 1; // Default to Red, Style 1
 
@@ -41,6 +44,12 @@ public class ClientConnection implements Runnable {
     try {
       reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
       writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+
+      // Start background writer thread to drain statesToSend queue
+      writerRunning = true;
+      writerThread = new Thread(this::writerLoop, "ClientWriter-" + clientId);
+      writerThread.setDaemon(true);
+      writerThread.start();
 
       System.out.println(
           "[Server] Client " + clientId + " connected from " + socket.getInetAddress());
@@ -96,14 +105,57 @@ public class ClientConnection implements Runnable {
           String chatMsg = line.substring(5);
           server.broadcastChatMessage(getCustomName() + ": " + chatMsg);
         } else if (line.equals("PING")) {
-          writer.write("PONG\n");
-          writer.flush();
+          synchronized (writer) {
+            writer.write("PONG\n");
+            writer.flush();
+          }
         }
       }
     } catch (IOException e) {
       System.err.println("[Server] Client " + clientId + " connection error: " + e.getMessage());
     } finally {
+      writerRunning = false;
+      if (writerThread != null && writerThread.isAlive()) {
+        writerThread.interrupt();
+      }
       disconnect();
+    }
+  }
+
+  private void writerLoop() {
+    try {
+      while (writerRunning && connected) {
+        GameState state = statesToSend.poll(100, TimeUnit.MILLISECONDS);
+        if (state != null) {
+          String json = Serializer.serializeGameState(state);
+          if (json != null) {
+            String encodedJson =
+                Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+            synchronized (writer) {
+              writer.write("STATE:" + encodedJson + "\n");
+              writer.flush();
+            }
+          }
+        }
+      }
+      // Drain remaining states before exiting
+      GameState state;
+      while ((state = statesToSend.poll()) != null) {
+        String json = Serializer.serializeGameState(state);
+        if (json != null) {
+          String encodedJson =
+              Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+          synchronized (writer) {
+            writer.write("STATE:" + encodedJson + "\n");
+            writer.flush();
+          }
+        }
+      }
+    } catch (IOException | InterruptedException e) {
+      if (connected) {
+        System.err.println(
+            "[Server] Writer thread error for client " + clientId + ": " + e.getMessage());
+      }
     }
   }
 
@@ -111,8 +163,10 @@ public class ClientConnection implements Runnable {
   public void sendStart() {
     if (!connected) return;
     try {
-      writer.write("START\n");
-      writer.flush();
+      synchronized (writer) {
+        writer.write("START\n");
+        writer.flush();
+      }
     } catch (IOException e) {
       connected = false;
     }
@@ -122,8 +176,10 @@ public class ClientConnection implements Runnable {
   public void sendChatMessage(String message) {
     if (!connected) return;
     try {
-      writer.write("CHAT:" + message + "\n");
-      writer.flush();
+      synchronized (writer) {
+        writer.write("CHAT:" + message + "\n");
+        writer.flush();
+      }
     } catch (IOException e) {
       connected = false;
     }
@@ -133,32 +189,20 @@ public class ClientConnection implements Runnable {
   public void sendRawMessage(String message) {
     if (!connected) return;
     try {
-      writer.write(message + "\n");
-      writer.flush();
+      synchronized (writer) {
+        writer.write(message + "\n");
+        writer.flush();
+      }
     } catch (IOException e) {
       connected = false;
     }
   }
 
-  /// Send a GameState to this client (thread-safe, queued). This is called by the server during the
+  /// Send a GameState to this client (non-blocking, queued). This is called by the server during the
   /// broadcast phase each frame.
   public void sendGameState(GameState state) {
     if (!connected) return;
-
-    try {
-      String json = Serializer.serializeGameState(state);
-      if (json != null) {
-        String encodedJson =
-            Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
-
-        writer.write("STATE:" + encodedJson + "\n");
-        writer.flush();
-      }
-    } catch (IOException e) {
-      System.err.println(
-          "[Server] Error sending GameState to client " + clientId + ": " + e.getMessage());
-      connected = false;
-    }
+    statesToSend.offer(state);
   }
 
   /// Retrieve the latest PlayerIntent from this client, or a default/null if none received yet. */
@@ -185,6 +229,10 @@ public class ClientConnection implements Runnable {
     if (!connected) return;
 
     connected = false;
+    writerRunning = false;
+    if (writerThread != null && writerThread.isAlive()) {
+      writerThread.interrupt();
+    }
     try {
       if (socket != null && !socket.isClosed()) {
         socket.close();

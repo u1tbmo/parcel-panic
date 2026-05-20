@@ -1,7 +1,6 @@
 package parcelpanic.net;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
@@ -14,7 +13,7 @@ import parcelpanic.shared.VehicleState.PromptType;
 
 /// Serializes and deserializes game objects to/from JSON for network transmission.
 public class Serializer {
-  private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+  private static final Gson gson = new Gson();
 
   // ============ GAMESTATE SERIALIZATION ============
 

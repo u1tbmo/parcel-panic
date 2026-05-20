@@ -422,7 +422,7 @@ public final class MatchScreen extends ContentScreen {
       timerLabel.setText(String.format("Time: %02d:%02d", minutes, remainingSeconds));
 
       if (seconds < 30) {
-        timerLabel.setTextFill(Color.RED);
+        timerLabel.setTextFill(Color.web("#FF4444"));
       } else {
         timerLabel.setTextFill(textColor);
       }

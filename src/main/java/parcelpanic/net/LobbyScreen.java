@@ -799,9 +799,12 @@ public final class LobbyScreen extends ContentScreen {
 
         boolean disabled = false;
         if (currentMode == Mode.HOSTING) {
-          HostingItem item = HostingItem.values()[i];
-          if (item == HostingItem.START_MATCH && activePlayers.size() < 2) {
-            disabled = true;
+          HostingItem[] hostingItems = HostingItem.values();
+          if (i < hostingItems.length) {
+            HostingItem item = hostingItems[i];
+            if (item == HostingItem.START_MATCH && activePlayers.size() < 2) {
+              disabled = true;
+            }
           }
         }
 
@@ -1013,7 +1016,9 @@ public final class LobbyScreen extends ContentScreen {
 
   private void handleConfirm() {
     if (currentMode == Mode.CHOOSE) {
-      ChooseItem item = ChooseItem.values()[selectedIndex];
+      ChooseItem[] chooseItems = ChooseItem.values();
+      if (selectedIndex >= chooseItems.length) return;
+      ChooseItem item = chooseItems[selectedIndex];
       switch (item) {
         case NAME -> openNameOverlay();
         case HOST -> startHosting();
@@ -1021,7 +1026,9 @@ public final class LobbyScreen extends ContentScreen {
         case BACK -> ctx.navigator().requestSwitch(new parcelpanic.screens.MenuScreen());
       }
     } else if (currentMode == Mode.HOSTING) {
-      HostingItem item = HostingItem.values()[selectedIndex];
+      HostingItem[] hostingItems = HostingItem.values();
+      if (selectedIndex >= hostingItems.length) return;
+      HostingItem item = hostingItems[selectedIndex];
       switch (item) {
         case START_MATCH -> {
           if (activePlayers.size() >= 2 && server != null) {
@@ -1058,7 +1065,9 @@ public final class LobbyScreen extends ContentScreen {
       closeActiveSocket();
       setMode(Mode.CHOOSE);
     } else if (currentMode == Mode.LOBBY) {
-      LobbyItem item = LobbyItem.values()[selectedIndex];
+      LobbyItem[] lobbyItems = LobbyItem.values();
+      if (selectedIndex >= lobbyItems.length) return;
+      LobbyItem item = lobbyItems[selectedIndex];
       switch (item) {
         case CHANGE_COLOR -> {
           myColorIndex = getNextColorIndex(myColorIndex, true);
@@ -1273,7 +1282,9 @@ public final class LobbyScreen extends ContentScreen {
       }
       case UI_LEFT -> {
         if (currentMode == Mode.HOSTING) {
-          HostingItem item = HostingItem.values()[selectedIndex];
+          HostingItem[] hostingItems = HostingItem.values();
+          if (selectedIndex >= hostingItems.length) return;
+          HostingItem item = hostingItems[selectedIndex];
           if (item == HostingItem.CHANGE_COLOR) {
             myColorIndex = getNextColorIndex(myColorIndex, false);
             sendNameColorUpdate();
@@ -1281,7 +1292,9 @@ public final class LobbyScreen extends ContentScreen {
             ctx.audio().playSound(AudioKey.MOVE_SELECTION);
           }
         } else if (currentMode == Mode.LOBBY) {
-          LobbyItem item = LobbyItem.values()[selectedIndex];
+          LobbyItem[] lobbyItems = LobbyItem.values();
+          if (selectedIndex >= lobbyItems.length) return;
+          LobbyItem item = lobbyItems[selectedIndex];
           if (item == LobbyItem.CHANGE_COLOR) {
             myColorIndex = getNextColorIndex(myColorIndex, false);
             sendNameColorUpdate();
@@ -1292,7 +1305,9 @@ public final class LobbyScreen extends ContentScreen {
       }
       case UI_RIGHT -> {
         if (currentMode == Mode.HOSTING) {
-          HostingItem item = HostingItem.values()[selectedIndex];
+          HostingItem[] hostingItems = HostingItem.values();
+          if (selectedIndex >= hostingItems.length) return;
+          HostingItem item = hostingItems[selectedIndex];
           if (item == HostingItem.CHANGE_COLOR) {
             myColorIndex = getNextColorIndex(myColorIndex, true);
             sendNameColorUpdate();
@@ -1300,7 +1315,9 @@ public final class LobbyScreen extends ContentScreen {
             ctx.audio().playSound(AudioKey.MOVE_SELECTION);
           }
         } else if (currentMode == Mode.LOBBY) {
-          LobbyItem item = LobbyItem.values()[selectedIndex];
+          LobbyItem[] lobbyItems = LobbyItem.values();
+          if (selectedIndex >= lobbyItems.length) return;
+          LobbyItem item = lobbyItems[selectedIndex];
           if (item == LobbyItem.CHANGE_COLOR) {
             myColorIndex = getNextColorIndex(myColorIndex, true);
             sendNameColorUpdate();

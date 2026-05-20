@@ -11,7 +11,7 @@ W..WWWWWWWWWW.HHHHH......F.....W
 W..W........W........WWWWWWWW..W
 W..W........W.F....F.W......W..W
 W..TW.......WFF....FFW......W..W
-W...W.......W...FF...W.WWWWWW..W
+W...W.......W...FF...W.WWWWWWF.W
 W...WWWWWWWWW...FF...WWW.T.WW..W
 W...F..........F..F.........F..W
 W..........F...........F.......W
