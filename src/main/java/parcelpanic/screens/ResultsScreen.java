@@ -65,7 +65,7 @@ public final class ResultsScreen extends ContentScreen {
     rootContainer.setPrefSize(VideoManager.LOGICAL_WIDTH, VideoManager.LOGICAL_HEIGHT);
 
     Image backgroundImage = ctx.assets().getImage(ImageKey.MENU_RESULTS);
-    if (backgroundImage != null) {
+    if (backgroundImage!= null) {
       ImageView bgImageView = new ImageView(backgroundImage);
       bgImageView.setFitWidth(VideoManager.LOGICAL_WIDTH);
       bgImageView.setFitHeight(VideoManager.LOGICAL_HEIGHT);
